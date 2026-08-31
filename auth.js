@@ -16,6 +16,8 @@ const DIR = __dirname;
 const CRED_PS1 = path.join(DIR, 'cred.ps1');
 const CRED_TARGET = 'gemini:antigravity';
 const CRED_USER = 'antigravity';
+const agyCli = require('./agy_cli.js');
+const CLI_LOGIN_MS = 55000;
 
 function loadClients() {
   const p = path.join(DIR, 'oauth-clients.json');
@@ -34,9 +36,10 @@ const CLIENTS = loadClients();
 const REDIRECT = 'https://antigravity.google/oauth-callback';
 const AUTH_EP = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_EP = 'https://oauth2.googleapis.com/token';
+// Jangan minta auth/aicode: client ID publik agy tidak mendaftarkan scope itu.
+// Google menolak dengan restricted_client / "Akses diblokir: Error Otorisasi".
 const SCOPE = [
   'openid', 'email', 'profile',
-  'https://www.googleapis.com/auth/aicode',
   'https://www.googleapis.com/auth/cclog',
   'https://www.googleapis.com/auth/cloud-platform',
   'https://www.googleapis.com/auth/experimentsandconfigs',
@@ -105,7 +108,8 @@ function getJson(urlStr) {
 }
 
 function tokenPath(home) {
-  return path.join(home, '.gemini', 'antigravity-cli', 'agy-oauth.json');
+  // CLI v1.1.22 Linux: ~/.gemini/antigravity-cli/antigravity-oauth-token
+  return path.join(home, '.gemini', 'antigravity-cli', 'antigravity-oauth-token');
 }
 
 function saveTokenFile(home, blobObj) {
@@ -176,30 +180,79 @@ function buildAuthUrl(client, { challenge, state }) {
   return AUTH_EP + '?' + q.toString();
 }
 
-function startLogin(opts) {
-  const label = String((opts && opts.label) || '').trim();
-  if (!label) return { ok: false, error: 'label wajib diisi' };
-  if (!CLIENTS.length) {
-    return { ok: false, error: 'oauth-clients.json kosong. Salin dari oauth-clients.json.example dan isi client id/secret (dari binary agy).' };
+function killPending(label) {
+  const rec = pending.get(label);
+  if (rec && rec.child) {
+    try { rec.child.kill('SIGKILL'); } catch (e) { /* ignore */ }
   }
-  const { verifier, challenge } = pkce();
-  const state = b64url(crypto.randomBytes(16));
-  const client = CLIENTS[0];
-  const url = buildAuthUrl(client, { challenge, state });
-  pending.set(label, {
-    label, verifier, challenge, state, client,
-    home: opts.home || null,
-    created: Date.now(),
-    expires: Date.now() + 10 * 60 * 1000,
+  pending.delete(label);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Login akun baru lewat CLI agy (PKCE + secret internal). Dashboard TIDAK
+// menukar code sendiri — secret di oauth-clients.json tidak berpasangan.
+function startLogin(opts) {
+  return new Promise((resolve) => {
+    const label = String((opts && opts.label) || '').trim();
+    if (!label) return resolve({ ok: false, error: 'label wajib diisi' });
+    const home = opts.home;
+    if (!home) return resolve({ ok: false, error: 'home akun kosong' });
+    killPending(label);
+    try { fs.mkdirSync(home, { recursive: true }); } catch (e) { /* ignore */ }
+
+    const cmd = agyCli.AGY + ' -p=ping --disable-slash-commands --print-timeout 8s';
+    const child = spawn('script', ['-qefc', cmd, '/dev/null'], {
+      cwd: home,
+      env: agyCli.childEnv({ home }),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const rec = {
+      label, home, child, url: null, buf: '',
+      created: Date.now(),
+      expires: Date.now() + CLI_LOGIN_MS,
+      closed: false,
+    };
+    pending.set(label, rec);
+
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      try { child.kill('SIGKILL'); } catch (e) { /* ignore */ }
+      pending.delete(label);
+      resolve({ ok: false, error });
+    };
+
+    const onData = (d) => {
+      rec.buf += d.toString('utf8');
+      const m = rec.buf.match(/https:\/\/accounts\.google\.com\/o\/oauth2\/[^\s\r]+/);
+      if (m && !settled) {
+        settled = true;
+        rec.url = m[0];
+        rec.expires = Date.now() + CLI_LOGIN_MS;
+        resolve({
+          ok: true,
+          label,
+          url: rec.url,
+          redirect: REDIRECT,
+          expiresInSec: Math.floor(CLI_LOGIN_MS / 1000),
+          hint: 'Buka link SEGERA, login Google, tempel URL redirect atau code, lalu Simpan. CLI agy timeout ~55 detik.',
+        });
+      }
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    child.on('error', (e) => fail('spawn agy: ' + e.message));
+    child.on('close', () => {
+      rec.closed = true;
+      if (!settled) fail('agy login tertutup sebelum URL muncul. Coba buat link lagi.');
+    });
+    setTimeout(() => {
+      if (!settled) fail('timeout menunggu URL login dari agy');
+    }, 15000);
   });
-  return {
-    ok: true,
-    label,
-    url,
-    redirect: REDIRECT,
-    expiresInSec: 600,
-    hint: 'Buka link, login Google, lalu tempel URL redirect (antigravity.google/oauth-callback?code=...) atau code-nya.',
-  };
 }
 
 function extractCode(pasted) {
@@ -288,51 +341,60 @@ async function exchange(code, rec) {
 async function completeLogin(opts) {
   const label = String((opts && opts.label) || '').trim();
   const rec = pending.get(label);
-  if (!rec) return { ok: false, error: 'sesi login tidak ada / kadaluarsa. Klik buat link lagi.' };
-  if (Date.now() > rec.expires) {
+  if (!rec || !rec.child) return { ok: false, error: 'sesi login tidak ada / kadaluarsa. Klik buat link lagi.' };
+  if (rec.closed) {
     pending.delete(label);
-    return { ok: false, error: 'sesi login kadaluarsa (10 menit). Buat link baru.' };
+    return { ok: false, error: 'proses agy sudah tertutup. Buat link baru, login, simpan dalam 50 detik.' };
+  }
+  if (Date.now() > rec.expires) {
+    killPending(label);
+    return { ok: false, error: 'sesi login kadaluarsa (~55 detik, batas CLI agy). Buat link baru.' };
   }
   const parsed = extractCode(opts.code);
   if (parsed.error) return { ok: false, error: parsed.error };
-  if (parsed.state && rec.state && parsed.state !== rec.state) {
-    return { ok: false, error: 'state tidak cocok. Buat link baru, jangan campur sesi.' };
-  }
-
-  const ex = await exchange(parsed.code, rec);
-  if (!ex.ok) return ex;
-  if (!ex.token.refresh_token) {
-    // masih bisa dipakai sampai access token mati, tapi rotasi akun butuh refresh
-  }
-  const blob = blobFromToken(ex.token);
-  const email = emailFromIdToken(ex.token.id_token);
-  if (!email && ex.token.access_token) {
-    try {
-      const ui = await getJson('https://www.googleapis.com/oauth2/v2/userinfo?access_token=' + encodeURIComponent(ex.token.access_token));
-      if (ui.json && ui.json.email) blob.email = ui.json.email;
-    } catch (e) {}
-  } else if (email) blob.email = email;
 
   const home = opts.home || rec.home;
-  let file = null;
-  if (home) file = saveTokenFile(home, blob);
-  const cred = await writeWinCred(blob, CRED_TARGET);
-  pending.delete(label);
-  return {
-    ok: true,
-    label,
-    email: blob.email || null,
-    hasRefresh: !!ex.token.refresh_token,
-    credWritten: !!cred.ok,
-    credError: cred.ok ? null : cred.error,
-    file,
-  };
+  const child = rec.child;
+  try { child.stdin.write(parsed.code + '\n'); } catch (e) {
+    killPending(label);
+    return { ok: false, error: 'gagal kirim code ke agy: ' + e.message };
+  }
+  try { child.stdin.end(); } catch (e) { /* ignore */ }
+
+  const deadline = Math.max(3000, rec.expires - Date.now() + 8000);
+  const t0 = Date.now();
+  while (Date.now() - t0 < deadline) {
+    if (fs.existsSync(tokenPath(home))) {
+      let blob = null;
+      try { blob = JSON.parse(fs.readFileSync(tokenPath(home), 'utf8')); } catch (e) { blob = null; }
+      if (blob && blob.token && blob.token.access_token) {
+        pending.delete(label);
+        const email = blob.email || emailFromIdToken(blob.token && blob.token.id_token) || null;
+        return {
+          ok: true,
+          label,
+          email,
+          hasRefresh: !!(blob.token && blob.token.refresh_token),
+          credWritten: false,
+          file: tokenPath(home),
+        };
+      }
+    }
+    if (rec.closed) break;
+    await sleep(250);
+  }
+  const leftover = (rec.buf || '').slice(-400);
+  killPending(label);
+  if (/authentication failed|OAuth2 flow failed|invalid_grant|interrupted/i.test(leftover)) {
+    return { ok: false, error: 'agy menolak code: ' + leftover.replace(/\s+/g, ' ').slice(0, 220) };
+  }
+  return { ok: false, error: 'agy tidak menulis token. Buat link baru, login, simpan lebih cepat. ' + leftover.replace(/\s+/g, ' ').slice(0, 160) };
 }
 
 function pendingInfo(label) {
   const rec = pending.get(label);
   if (!rec) return null;
-  return { label, expiresInSec: Math.max(0, Math.ceil((rec.expires - Date.now()) / 1000)), url: buildAuthUrl(rec.client, rec) };
+  return { label, expiresInSec: Math.max(0, Math.ceil((rec.expires - Date.now()) / 1000)), url: rec.url || null };
 }
 
 let credLock = Promise.resolve();

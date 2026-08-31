@@ -525,7 +525,7 @@ function handleAdmin(req, res, urlPath, urlObj) {
         acc = created.account;
       }
       const r = auth.startLogin({ label, home: acc.geminiDir });
-      return sendJson(res, r.ok ? 200 : 400, r);
+      return Promise.resolve(r).then(out => sendJson(res, out.ok ? 200 : 400, out));
     });
   }
   if (urlPath === '/admin/accounts/login/complete' && req.method === 'POST') {
@@ -573,8 +573,14 @@ function handleAdmin(req, res, urlPath, urlObj) {
   }
   if (urlPath === '/admin/egress/check' && req.method === 'POST') {
     return (async () => {
-      const r = await proxies.checkAll();
-      sendJson(res, 200, { ok: true, ...r, stats: proxies.stats() });
+      try {
+        const r = await proxies.checkAll();
+        if (r && r.error) return sendJson(res, 500, { ok: false, error: r.error, ...r, stats: proxies.stats() });
+        sendJson(res, 200, { ok: true, ...r, stats: proxies.stats() });
+      } catch (e) {
+        console.error('[admin] egress/check:', e);
+        sendJson(res, 500, { ok: false, error: String(e && e.message || e) });
+      }
     })();
   }
 

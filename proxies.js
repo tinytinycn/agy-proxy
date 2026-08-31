@@ -137,7 +137,12 @@ function stats() {
 
 // Probe semua proxy: siapa yang jalan dan IP egress-nya apa.
 async function checkAll(timeoutMs = 12000) {
-  const { ProxyAgent, fetch: pfetch } = require('undici');
+  let ProxyAgent, pfetch;
+  try {
+    ({ ProxyAgent, fetch: pfetch } = require('undici'));
+  } catch (e) {
+    return { ms: 0, alive: alive().length, total: pool.length, error: 'modul undici tidak terpasang: ' + e.message };
+  }
   const t0all = Date.now();
   await Promise.all(pool.map(async (p) => {
     const t0 = Date.now();

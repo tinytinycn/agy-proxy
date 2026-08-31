@@ -1,5 +1,6 @@
 # secrets & live state
 homes/
+.gemini/
 accounts.json
 proxies.txt
 config.json
