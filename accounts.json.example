@@ -1,0 +1,18 @@
+[
+  {
+    "label": "primary",
+    "credTarget": "gemini:antigravity",
+    "geminiDir": "",
+    "disabled": false,
+    "cooldown_until": 0,
+    "requests": 0,
+    "errors": 0,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "last_used": 0,
+    "last_error": null,
+    "ok_count": 0,
+    "last_ms": 0,
+    "email": null
+  }
+]

@@ -1,0 +1,20 @@
+# secrets & live state
+homes/
+accounts.json
+proxies.txt
+config.json
+usage.jsonl
+oauth-clients.json
+adc.json
+.env
+*.bin
+_cred*
+_lca.json
+dbg.log
+*.log
+server.err.log
+
+# scratch
+UsersRYZEN*
+.cred-write-*.json
+node_modules/

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Antigravity Proxy</title>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --surface: #10141b;
+      --panel: #151a22;
+      --line: #252c38;
+      --txt: #e7edf6;
+      --muted: #8b95a7;
+      --acc: #3dd68c;
+      --acc2: #5eb1ff;
+      --warn: #e8b84a;
+      --bad: #f07178;
+      --shadow: 0 8px 28px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--txt);
+      font: 13.5px/1.45 "Segoe UI", ui-sans-serif, system-ui, sans-serif; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    .app { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 56px 1fr; height: 100%; }
+    header {
+      grid-column: 1 / -1; display: flex; align-items: center; gap: 16px;
+      padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--surface);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: .02em; }
+    .logo { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg,#3dd68c,#5eb1ff); }
+    .hdr-meta { color: var(--muted); font-size: 12px; }
+    .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    nav { border-right: 1px solid var(--line); background: var(--surface); padding: 12px; overflow: auto; }
+    .nav-btn {
+      width: 100%; text-align: left; background: transparent; border: 0; color: var(--muted);
+      padding: 9px 10px; border-radius: 8px; margin-bottom: 4px;
+    }
+    .nav-btn.active { background: #1c2430; color: var(--txt); }
+    .nav-btn:hover { background: #1a2029; color: var(--txt); }
+    main { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .view { display: none; flex: 1; min-height: 0; }
+    .view.active { display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .toolbar h2 { margin: 0; font-size: 15px; font-weight: 600; margin-right: auto; }
+    .btn {
+      background: #163228; color: var(--acc); border: 1px solid #245c45;
+      border-radius: 8px; padding: 7px 11px; white-space: nowrap;
+    }
+    .btn.ghost { background: transparent; color: var(--txt); border-color: var(--line); }
+    .btn.bad { background: #2a1216; color: var(--bad); border-color: #5c242e; }
+    .btn:disabled { opacity: .45; cursor: default; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .pill.ok { color: var(--acc); border-color: #245c45; }
+    .pill.bad { color: var(--bad); border-color: #5c242e; }
+    .pill.warn { color: var(--warn); border-color: #5c4a1e; }
+    .pill.ver { color: var(--muted); font-size: 10.5px; padding: 2px 7px; font-family: ui-monospace, Consolas, monospace; }
+    .switch { position: relative; width: 40px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #2a3140; border-radius: 999px; transition: .15s; }
+    .slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #d7dee8; border-radius: 50%; transition: .15s; }
+    .switch input:checked + .slider { background: #1f6a48; }
+    .switch input:checked + .slider:before { transform: translateX(18px); background: var(--acc); }
+    .table-wrap { flex: 1; overflow: auto; padding: 0 18px 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; position: sticky; top: 0; background: var(--bg); }
+    tr:hover td { background: #121820; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+    .muted { color: var(--muted); }
+    .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .icon-btn { background: transparent; border: 1px solid transparent; color: var(--muted); border-radius: 6px; padding: 4px 8px; }
+    .icon-btn:hover { border-color: var(--line); color: var(--txt); }
+    .icon-btn.bad:hover { color: var(--bad); border-color: #5c242e; }
+    .add-box { padding: 0 18px 18px; }
+    textarea, input[type=text], select {
+      background: #0d1016; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    }
+    textarea { min-height: 72px; resize: vertical; width: 100%; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .ok { color: var(--acc); } .err { color: var(--bad); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 18px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
+    .card h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+    .kv { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .kv b { color: var(--txt); font-weight: 550; display: block; word-break: break-all; }
+    .msgs { flex: 1; overflow: auto; padding: 20px 24px; }
+    .msg { max-width: 820px; margin: 0 auto 14px; }
+    .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .msg .body { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; }
+    .msg.user .body { background: #152033; }
+    .composer { border-top: 1px solid var(--line); padding: 12px 16px; background: var(--surface); }
+    .composer-inner { max-width: 820px; margin: 0 auto; display: flex; gap: 8px; }
+    .composer-inner textarea { min-height: 46px; flex: 1; }
+    .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
+    .login-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+    .login-url { word-break: break-all; font-size: 12px; color: var(--acc2); }
+    .toast { position: fixed; bottom: 18px; right: 18px; background: #1c2430; border: 1px solid var(--line);
+             border-radius: 8px; padding: 10px 16px; opacity: 0; transition: opacity .25s; pointer-events: none;
+             max-width: 420px; z-index: 20; }
+    .toast.show { opacity: 1; }
+    .kpis { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+    .kpi { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .kpi b { color: var(--txt); font-weight: 600; font-size: 12px; margin-left: 5px; }
+    .kpi b.ok { color: var(--acc); } .kpi b.warn { color: var(--warn); } .kpi b.bad { color: var(--bad); }
+    pre.out { background: #0d1016; border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+              overflow: auto; white-space: pre-wrap; font-size: 12px; margin: 0; min-height: 180px; }
+    @media (max-width: 860px) { .app { grid-template-columns: 1fr; } nav { display: none; } .grid2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand"><div class="logo"></div>Antigravity Proxy</div>
+      <div class="hdr-meta" id="hdrMeta">127.0.0.1:1413</div>
+      <span class="pill ver" id="verPill">v—</span>
+      <div class="hdr-right">
+        <span class="pill" id="statusPill">loading</span>
+        <span class="pill" id="egPill">egress off</span>
+        <label class="switch" title="Egress on/off">
+          <input type="checkbox" id="egSwitch" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </header>
+    <nav>
+      <button class="nav-btn active" data-view="chat">Chat</button>
+      <button class="nav-btn" data-view="requests">Requests</button>
+      <button class="nav-btn" data-view="models">Models</button>
+      <button class="nav-btn" data-view="proxies">Proxies</button>
+      <button class="nav-btn" data-view="accounts">Accounts</button>
+      <button class="nav-btn" data-view="quota">Quota</button>
+      <button class="nav-btn" data-view="settings">Settings</button>
+    </nav>
+    <main>
+      <section class="view active" id="view-chat">
+        <div class="toolbar">
+          <h2>Chat</h2>
+          <select id="pg-model" style="width:260px"></select>
+        </div>
+        <div class="msgs" id="msgs"></div>
+        <div class="composer">
+          <div class="composer-inner">
+            <textarea id="pg-prompt" placeholder="Ketik pesan… Enter kirim, Shift+Enter baris baru"></textarea>
+            <button class="btn" id="btnSend">Kirim</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-requests">
+        <div class="toolbar">
+          <h2>Requests</h2>
+          <button class="btn ghost" id="btnReqRefresh">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Periode</th><th>Request</th><th>OK</th><th>Err</th>
+                <th>Token in</th><th>Token out</th><th>Total token</th>
+              </tr>
+            </thead>
+            <tbody id="usageWindows"></tbody>
+          </table>
+          <h3 style="font-size:13px;margin:18px 0 8px;font-weight:600">Model dipakai</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Model</th><th>Request</th><th>OK</th><th>Err</th>
+                <th>Token in</th><th>Token out</th><th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="usageModels"></tbody>
+          </table>
+          <h3 style="font-size:13px;margin:18px 0 8px;font-weight:600">Log terakhir</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Waktu</th><th>OK</th><th>Akun</th><th>Model</th><th>Egress</th>
+                <th>In</th><th>Out</th><th>ms</th><th>Err</th>
+              </tr>
+            </thead>
+            <tbody id="reqRows"></tbody>
+          </table>
+          <div class="empty" id="reqEmpty">Belum ada request.</div>
+        </div>
+      </section>
+
+      <section class="view" id="view-models">
+        <div class="toolbar">
+          <h2>Models</h2>
+          <span class="pill" id="m-sub">0</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Label</th></tr></thead>
+            <tbody id="modelRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="view" id="view-proxies">
+        <div class="toolbar">
+          <h2>HTTP proxies</h2>
+          <span class="pill" id="egMeta">0</span>
+          <select id="eg-mode" style="width:160px">
+            <option value="rotate">rotate</option>
+            <option value="sticky">sticky</option>
+            <option value="random">random</option>
+          </select>
+          <button class="btn ghost" id="btnEgCheck">Health check</button>
+          <button class="btn bad" id="btnEgClear">Hapus semua</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Host</th><th>Status</th><th>Fails</th><th>Latensi</th><th>IP</th><th style="width:90px"></th>
+              </tr>
+            </thead>
+            <tbody id="egRows"></tbody>
+          </table>
+          <div class="empty" id="egEmpty">Belum ada proxy. Tempel list di bawah.</div>
+        </div>
+        <div class="add-box">
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <textarea id="p-bulk" placeholder="host:port:user:pass — satu per baris. Boleh koma."></textarea>
+            <div style="display:flex;flex-direction:column;gap:8px;min-width:140px">
+              <button class="btn" id="btnEgAdd">Tambah</button>
+              <button class="btn ghost" id="btnEgAddCheck">Tambah &amp; cek</button>
+            </div>
+          </div>
+          <div class="hint">Satu baris = satu proxy. Password tidak ditampilkan di tabel.</div>
+        </div>
+      </section>
+
+      <section class="view" id="view-accounts">
+        <div class="toolbar">
+          <h2>Accounts</h2>
+          <span class="pill" id="acct-sub">0 akun</span>
+          <button class="btn" id="btnLogin">Login (link + kode)</button>
+          <button class="btn ghost" id="btnProbe">Probe</button>
+          <button class="btn ghost" id="btnCdReset">Reset cooldown</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Label</th><th>Email</th><th>Status</th><th>Req</th><th>OK</th><th>Err</th>
+                <th>Token in</th><th>Token out</th><th>Terakhir</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="acctRows"></tbody>
+          </table>
+          <div class="empty" id="acctEmpty">Belum ada akun.</div>
+          <div id="loginPanel" class="login-box" style="display:none">
+            <div class="hint" style="margin:0 0 8px">1. Isi label → buat link. 2. Buka, login Google. 3. Tempel URL redirect (<span class="mono">oauth-callback?code=...</span>) atau code-nya.</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input type="text" id="a-label" placeholder="label, misal gmail-2" style="flex:1" />
+              <button class="btn" id="btnMakeLink">Buat link</button>
+            </div>
+            <div id="login-box" style="display:none">
+              <div class="muted" style="font-size:11px;margin-bottom:6px">Buka link ini:</div>
+              <div class="login-url mono" id="login-url"></div>
+              <div style="display:flex;gap:8px;margin:8px 0">
+                <button class="btn ghost" id="btnCopyUrl">Salin</button>
+                <a id="login-open" target="_blank" rel="noopener"><button class="btn ghost">Buka tab</button></a>
+              </div>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="a-code" placeholder="tempel URL redirect atau code" style="flex:1" />
+                <button class="btn" id="btnSaveAcct">Simpan akun</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-quota">
+        <div class="toolbar">
+          <h2>Quota</h2>
+          <span class="pill" id="quotaMeta">auto</span>
+          <button class="btn ghost" id="btnQuotaForce">Force refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Akun</th>
+                <th>Email</th>
+                <th>Credits</th>
+                <th>Gemini 5h</th>
+                <th>Gemini week</th>
+                <th>Claude/GPT 5h</th>
+                <th>Claude/GPT week</th>
+                <th>ms</th>
+              </tr>
+            </thead>
+            <tbody id="quotaRows"></tbody>
+          </table>
+          <div class="empty" id="quotaEmpty">Mengambil quota semua akun…</div>
+        </div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="toolbar"><h2>Settings</h2></div>
+        <div class="grid2">
+          <div class="card">
+            <h3>OpenAI endpoint</h3>
+            <div class="kv">Base URL<b class="mono" id="baseUrl">http://127.0.0.1:1413/v1</b></div>
+            <div class="kv">API key<b class="mono">sk-agy-local</b></div>
+            <div class="kv">Anthropic<b class="mono">POST /v1/messages</b></div>
+            <div class="kv">Gemini native<b class="mono">POST /v1beta/models/{m}:generateContent</b></div>
+          </div>
+          <div class="card">
+            <h3>Upstream</h3>
+            <div class="kv">agy.exe<b class="mono" id="agyPath">—</b></div>
+            <div class="kv">Rotasi<b id="rotText">rotate</b></div>
+            <div class="kv">Default model<b class="mono" id="defModel">—</b></div>
+            <div class="kv">In-flight<b id="inflightText">—</b></div>
+            <div class="kv">Uptime<b id="uptimeText">—</b></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    const BASE = location.origin;
+    const API_KEY = new URLSearchParams(location.search).get('key') || '';
+    let loginLabel = '';
+    let loginUrl = '';
+    let lastState = null;
+    let modelsFilled = false;
+
+    const $ = (id) => document.getElementById(id);
+    function toast(m) {
+      const t = $('toast'); t.textContent = m; t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2800);
+    }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmt(n) { n = n || 0; return n > 1e6 ? (n/1e6).toFixed(1)+'M' : n > 1e3 ? (n/1e3).toFixed(1)+'k' : String(n); }
+
+    async function api(p, opts) {
+      try {
+        opts = opts || {};
+        const headers = Object.assign({}, opts.headers || {});
+        if (API_KEY) headers.Authorization = headers.Authorization || ('Bearer ' + API_KEY);
+        const r = await fetch(BASE + p, Object.assign({}, opts, { headers }));
+        const j = await r.json().catch(() => ({ error: 'bukan JSON', status: r.status }));
+        if (!r.ok && !j.ok && !j.error) j.error = 'HTTP ' + r.status;
+        return j;
+      } catch (e) { toast('gagal: ' + e.message); return null; }
+    }
+    async function act(p) {
+      toast('menjalankan ' + p + ' ...');
+      const r = await api(p, { method: 'POST' });
+      if (r) toast((r.ok !== false ? 'selesai' : 'gagal') + ': ' + (r.error || p));
+      refresh();
+    }
+
+    document.querySelectorAll('.nav-btn').forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        btn.classList.add('active');
+        $('view-' + btn.dataset.view).classList.add('active');
+        if (btn.dataset.view === 'quota') loadQuota(false);
+      };
+    });
+
+    function addMsg(role, text) {
+      const el = document.createElement('div');
+      el.className = 'msg ' + role;
+      el.innerHTML = '<div class="who">' + role + '</div><div class="body"></div>';
+      el.querySelector('.body').textContent = text;
+      $('msgs').appendChild(el);
+      $('msgs').scrollTop = $('msgs').scrollHeight;
+      return el.querySelector('.body');
+    }
+
+    async function refresh() {
+      const s = await api('/admin/state');
+      if (!s) return;
+      lastState = s;
+      const A = s.accounts.summary, E = s.egress;
+
+      $('hdrMeta').textContent = '127.0.0.1:' + s.port;
+      $('verPill').textContent = 'v' + (s.version || '');
+      $('statusPill').textContent = A.usable + '/' + A.total + ' akun · busy ' + (s.accounts.busy || 0) + ' · ' + A.requests + ' req';
+      $('statusPill').className = 'pill' + (A.usable ? ' ok' : ' bad');
+      $('egPill').textContent = E.enabled ? ('egress on · ' + E.total) : 'egress off';
+      $('egPill').className = 'pill' + (E.enabled ? ' ok' : '');
+      $('egSwitch').checked = !!E.enabled;
+
+      $('eg-mode').value = E.mode || 'rotate';
+      $('egMeta').textContent = E.alive + '/' + E.total + ' · ' + (E.mode || 'rotate');
+      const items = E.items || [];
+      $('egEmpty').style.display = items.length ? 'none' : 'block';
+      $('egRows').innerHTML = items.map(p =>
+        '<tr><td class="muted">' + p.id + '</td><td class="mono">' + esc(p.host) + '</td>' +
+        '<td>' + (p.ok ? '<span class="pill ok">ok</span>' : '<span class="pill bad">mati</span>') + '</td>' +
+        '<td class="num">' + p.fails + '</td><td class="num">' + (p.latencyMs != null ? p.latencyMs + 'ms' : '-') + '</td>' +
+        '<td class="mono">' + esc(p.egressIp || '-') + '</td>' +
+        '<td><button class="icon-btn bad" onclick="delProxy(' + p.id + ')">hapus</button></td></tr>'
+      ).join('');
+
+      $('acct-sub').textContent = A.total + ' akun';
+      const accts = s.accounts.items || [];
+      $('acctEmpty').style.display = accts.length ? 'none' : 'block';
+      $('acctRows').innerHTML = accts.map(a => {
+        const st = a.disabled ? '<span class="pill bad">disabled</span>'
+                 : a.cooling ? '<span class="pill warn">cooldown ' + a.cooldownSec + 's</span>'
+                 : '<span class="pill ok">siap</span>';
+        const err = a.last_error ? '<div class="err" style="font-size:11px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.last_error) + '">' + esc(a.last_error) + '</div>' : '';
+        return '<tr><td class="mono">' + esc(a.label) + err + '</td>' +
+          '<td class="muted">' + esc(a.email || '-') + '</td><td>' + st + '</td>' +
+          '<td class="num">' + a.requests + '</td><td class="num">' + a.ok + '</td><td class="num">' + (a.errors || 0) + '</td>' +
+          '<td class="num mono">' + fmt(a.tokens_in) + '</td><td class="num mono">' + fmt(a.tokens_out) + '</td>' +
+          '<td class="muted">' + (a.last_used ? a.last_used.slice(11, 19) : '-') + '</td>' +
+          '<td style="white-space:nowrap">' +
+            '<button class="icon-btn" onclick="tog(\'' + esc(a.label) + '\',' + (a.disabled ? 'false' : 'true') + ')">' + (a.disabled ? 'enable' : 'disable') + '</button> ' +
+            '<button class="icon-btn bad" onclick="delAcct(\'' + esc(a.label) + '\')">hapus</button>' +
+          '</td></tr>';
+      }).join('');
+
+      const models = s.models || [];
+      $('m-sub').textContent = models.length + ' model';
+      $('modelRows').innerHTML = models.map(m =>
+        '<tr><td class="mono">' + esc(m.id) + '</td><td class="muted">' + esc(m.label || '') + '</td></tr>'
+      ).join('');
+      const sel = $('pg-model');
+      if (sel && !modelsFilled && models.length) {
+        models.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.id; sel.appendChild(o); });
+        if (s.config && s.config.defaultModel) sel.value = s.config.defaultModel;
+        modelsFilled = true;
+      }
+
+      const rec = s.recent || [];
+      const U = s.usage || { windows: {}, models: [] };
+      const W = U.windows || {};
+      function winRow(label, b) {
+        b = b || { requests: 0, ok: 0, errors: 0, tokens_in: 0, tokens_out: 0, tokens: 0 };
+        return '<tr><td>' + label + '</td>' +
+          '<td class="num">' + (b.requests || 0) + '</td>' +
+          '<td class="num">' + (b.ok || 0) + '</td>' +
+          '<td class="num">' + (b.errors || 0) + '</td>' +
+          '<td class="num mono">' + fmt(b.tokens_in) + '</td>' +
+          '<td class="num mono">' + fmt(b.tokens_out) + '</td>' +
+          '<td class="num mono">' + fmt(b.tokens) + '</td></tr>';
+      }
+      $('usageWindows').innerHTML =
+        winRow('1 hari', W.d1) +
+        winRow('7 hari', W.d7) +
+        winRow('30 hari', W.d30) +
+        winRow('Semua', W.all);
+      const mods = U.models || [];
+      $('usageModels').innerHTML = mods.length
+        ? mods.map(m =>
+            '<tr><td class="mono">' + esc(m.id) + '</td>' +
+            '<td class="num">' + m.requests + '</td>' +
+            '<td class="num">' + m.ok + '</td>' +
+            '<td class="num">' + m.errors + '</td>' +
+            '<td class="num mono">' + fmt(m.tokens_in) + '</td>' +
+            '<td class="num mono">' + fmt(m.tokens_out) + '</td>' +
+            '<td class="num mono">' + fmt(m.tokens) + '</td></tr>'
+          ).join('')
+        : '<tr><td colspan="7" class="muted">belum ada</td></tr>';
+      $('reqEmpty').style.display = rec.length ? 'none' : 'block';
+      $('reqRows').innerHTML = rec.map(r => {
+        const t = r.t ? new Date(r.t).toISOString().slice(11, 19) : '-';
+        const rin = r.tokens_in || 0, rout = r.tokens_out || 0;
+        return '<tr><td class="mono muted">' + t + '</td><td>' + (r.ok ? '<span class="pill ok">ok</span>' : '<span class="pill bad">err</span>') + '</td>' +
+          '<td class="mono">' + esc(r.account || '') + '</td><td class="mono">' + esc(r.model || '') + '</td>' +
+          '<td class="mono muted">' + esc(r.egress || '') + '</td>' +
+          '<td class="num mono">' + fmt(rin) + '</td><td class="num mono">' + fmt(rout) + '</td>' +
+          '<td class="num">' + (r.ms || 0) + '</td>' +
+          '<td class="err" style="font-size:11px">' + esc(r.err || '') + '</td></tr>';
+      }).join('');
+
+      $('baseUrl').textContent = 'http://127.0.0.1:' + s.port + '/v1';
+      $('agyPath').textContent = s.agy || '—';
+      $('rotText').textContent = (s.config && s.config.rotation) || 'lru';
+      $('defModel').textContent = (s.config && s.config.defaultModel) || '—';
+      $('inflightText').textContent = (s.inflight || 0) + '/' + (s.maxInflight || '?') + '  q ' + (s.queued || 0);
+      $('uptimeText').textContent = Math.floor((s.uptimeSec || 0) / 60) + 'm';
+    }
+
+    async function tog(label, dis) {
+      await api('/admin/accounts/' + encodeURIComponent(label) + '/' + (dis ? 'disable' : 'enable'), { method: 'POST' });
+      refresh();
+    }
+    async function delAcct(label) {
+      if (!confirm('Hapus akun "' + label + '"?')) return;
+      const r = await api('/admin/accounts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) });
+      toast(r && r.ok ? ('akun dihapus: ' + label) : ('gagal: ' + (r && r.error || 'unknown')));
+      refresh();
+    }
+    async function delProxy(id) {
+      if (!confirm('Hapus proxy #' + id + '?')) return;
+      const r = await api('/admin/egress/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      toast(r && r.ok ? 'proxy dihapus' : ('gagal: ' + (r && r.error || 'unknown')));
+      refresh();
+    }
+    async function addBulk(andCheck) {
+      const text = $('p-bulk').value;
+      if (!text.trim()) { toast('tempel baris proxy dulu'); return; }
+      const r = await api('/admin/egress/add-bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      if (r && (r.ok || r.added > 0)) {
+        toast('ditambah ' + r.added + '  skip ' + r.skipped + '  err ' + ((r.errors && r.errors.length) || 0));
+        $('p-bulk').value = '';
+        if (andCheck) await act('/admin/egress/check');
+      } else toast('gagal: ' + (r && r.error || 'unknown'));
+      refresh();
+    }
+    async function startLogin() {
+      const label = $('a-label').value.trim();
+      if (!label) { toast('label wajib diisi'); return; }
+      const r = await api('/admin/accounts/login/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) });
+      if (!r || !r.ok) { toast('gagal: ' + (r && r.error || 'unknown')); return; }
+      loginLabel = label; loginUrl = r.url;
+      $('login-box').style.display = 'block';
+      $('login-url').textContent = r.url;
+      $('login-open').href = r.url;
+      $('a-code').value = '';
+      $('a-code').focus();
+      toast('link siap — buka, login, tempel URL redirect');
+    }
+    async function completeLogin() {
+      const label = loginLabel || $('a-label').value.trim();
+      const code = $('a-code').value.trim();
+      if (!label) { toast('label kosong'); return; }
+      if (!code) { toast('tempel URL redirect atau code'); return; }
+      toast('menukar code ...');
+      const r = await api('/admin/accounts/login/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, code }) });
+      if (r && r.ok) {
+        toast('akun masuk: ' + (r.email || label) + (r.hasRefresh ? '' : ' (tanpa refresh_token)'));
+        $('a-label').value = ''; $('a-code').value = '';
+        $('login-box').style.display = 'none';
+        $('loginPanel').style.display = 'none';
+      } else toast('gagal: ' + (r && r.error || 'unknown'));
+      refresh();
+    }
+    function pctCell(v) {
+      if (v == null || v === '') return '<span class="muted">—</span>';
+      const n = Number(v);
+      const cls = n >= 50 ? 'ok' : n >= 15 ? 'warn' : 'bad';
+      return '<span class="pill ' + cls + '">' + n + '%</span>';
+    }
+    let quotaLoading = false;
+    async function loadQuota(force) {
+      if (quotaLoading && !force) return;
+      quotaLoading = true;
+      $('quotaEmpty').style.display = 'block';
+      $('quotaEmpty').textContent = 'Mengambil quota semua akun…';
+      $('quotaMeta').textContent = 'loading';
+      const r = await api('/admin/quota' + (force ? '?force=1' : ''));
+      quotaLoading = false;
+      if (!r) { $('quotaEmpty').textContent = 'gagal jaringan'; return; }
+      const items = r.items || [];
+      $('quotaMeta').textContent = (r.cached ? 'cache ' + Math.round((r.ageMs || 0) / 1000) + 's' : 'fresh') + ' · ' + items.length + ' akun';
+      $('quotaEmpty').style.display = items.length ? 'none' : 'block';
+      if (!items.length) $('quotaEmpty').textContent = 'Belum ada akun.';
+      $('quotaRows').innerHTML = items.map(a =>
+        '<tr><td class="mono">' + esc(a.label) + (a.ok ? '' : ' <span class="pill bad">err</span>') + '</td>' +
+        '<td class="muted">' + esc(a.email || '-') + '</td>' +
+        '<td class="num">' + (a.credits == null ? '—' : a.credits) + '</td>' +
+        '<td>' + pctCell(a.gemini5h) + '</td><td>' + pctCell(a.geminiWeek) + '</td>' +
+        '<td>' + pctCell(a.other5h) + '</td><td>' + pctCell(a.otherWeek) + '</td>' +
+        '<td class="num muted">' + (a.ms || 0) + (a.error ? '<div class="err" style="font-size:11px">' + esc(a.error) + '</div>' : '') + '</td></tr>'
+      ).join('');
+    }
+    async function play() {
+      const prompt = $('pg-prompt').value.trim();
+      const model = $('pg-model').value;
+      if (!prompt) { toast('isi prompt'); return; }
+      addMsg('user', prompt);
+      $('pg-prompt').value = '';
+      const body = addMsg('assistant', '…');
+      const r = await api('/admin/playground', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, model }) });
+      body.textContent = r && r.ok ? r.text : ('ERR ' + (r && r.error || JSON.stringify(r)));
+      refresh();
+    }
+
+    $('btnSend').onclick = play;
+    $('pg-prompt').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); play(); }
+    });
+    $('btnReqRefresh').onclick = refresh;
+    $('btnEgCheck').onclick = () => act('/admin/egress/check');
+    $('btnEgClear').onclick = async () => {
+      if (!confirm('Hapus SEMUA proxy?')) return;
+      const r = await api('/admin/egress/clear', { method: 'POST' });
+      toast(r && r.ok ? ('terhapus ' + r.removed) : ('gagal: ' + (r && r.error || 'unknown')));
+      refresh();
+    };
+    $('btnEgAdd').onclick = () => addBulk(false);
+    $('btnEgAddCheck').onclick = () => addBulk(true);
+    $('eg-mode').onchange = async () => {
+      const mode = $('eg-mode').value;
+      const en = $('egSwitch').checked;
+      await api('/admin/egress/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, enabled: en }) });
+      toast('egress: ' + mode);
+      refresh();
+    };
+    $('egSwitch').onchange = async () => {
+      const mode = $('eg-mode').value;
+      const en = $('egSwitch').checked;
+      await api('/admin/egress/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, enabled: en }) });
+      toast('egress ' + (en ? 'on' : 'off'));
+      refresh();
+    };
+    $('btnLogin').onclick = () => {
+      const p = $('loginPanel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      if (p.style.display === 'block') $('a-label').focus();
+    };
+    $('btnMakeLink').onclick = startLogin;
+    $('btnSaveAcct').onclick = completeLogin;
+    $('btnCopyUrl').onclick = () => {
+      if (!loginUrl) return;
+      navigator.clipboard.writeText(loginUrl).then(() => toast('link disalin')).catch(() => toast('gagal salin'));
+    };
+    $('btnProbe').onclick = () => act('/admin/accounts/probe');
+    $('btnCdReset').onclick = () => act('/admin/accounts/reset');
+    $('btnQuotaForce').onclick = () => loadQuota(true);
+
+    refresh();
+    loadQuota(false);
+  </script>
+</body>
+</html>

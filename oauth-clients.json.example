@@ -1,0 +1,6 @@
+[
+  {
+    "id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "secret": "YOUR_GOOGLE_OAUTH_CLIENT_SECRET"
+  }
+]
