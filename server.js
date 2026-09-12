@@ -1,6 +1,6 @@
 'use strict';
 // Antigravity (agy) -> OpenAI / Anthropic / Gemini compatible proxy
-// Port default 1413. Multi-akun round-robin + egress proxy round-robin.
+// Port default 8081. Multi-akun round-robin + egress proxy round-robin.
 //
 // Endpoint:
 //   GET  /v1/models                       (OpenAI)
@@ -27,11 +27,11 @@ const quotaMod = require('./quota.js');
 const usage = require('./usage.js');
 
 const DIR = __dirname;
-const PORT = parseInt(process.env.AGY_PROXY_PORT || '1413', 10);
+const PORT = parseInt(process.env.AGY_PROXY_PORT || '8081', 10);
 
 const CONFIG_FILE = path.join(DIR, 'config.json');
 let config = {
-  apiKey: 'sk-agy-local',
+  apiKey: 'change-me',
   rotation: 'rotate',
   maxAccountRetries: 4,
   cooldownMs: 60000,
@@ -39,6 +39,7 @@ let config = {
   adminAuth: false,
   listenHost: '127.0.0.1',
   maxInflight: 8,
+  permissionMode: 'skip',
   egress: { enabled: false, mode: 'rotate', failThreshold: 3 },
 };
 if (fs.existsSync(CONFIG_FILE)) {
@@ -106,8 +107,22 @@ function openaiMessagesToPrompt(messages) {
       if (Array.isArray(content)) {
         content = content.map(c => (c && (c.text || c.content)) || '').filter(Boolean).join('\n');
       }
+      content = content || '';
+
+      let assistantExtra = '';
+      if (m.reasoning_content) {
+        assistantExtra += `<thought>\n${m.reasoning_content}\n</thought>\n`;
+      }
+      if (Array.isArray(m.tool_calls) && m.tool_calls.length) {
+        for (const tc of m.tool_calls) {
+          const fn = tc.function || {};
+          assistantExtra += `\n[Tool Call: ${fn.name || 'tool'}(${fn.arguments || ''})]\n`;
+        }
+      }
+
       if (role === 'system') parts.push('[SYSTEM]\n' + content);
-      else if (role === 'assistant') parts.push('[ASSISTANT]\n' + content);
+      else if (role === 'assistant') parts.push('[ASSISTANT]\n' + (assistantExtra ? assistantExtra + content : content));
+      else if (role === 'tool') parts.push(`[TOOL RESULT: ${m.name || m.tool_call_id || 'tool'}]\n` + content);
       else parts.push('[USER]\n' + content);
     }
   }
@@ -131,12 +146,13 @@ function anthropicToPrompt(body) {
 function usageFromAgy(u, model) {
   const inp = (u && u.input_tokens) || 0;
   const out = (u && u.output_tokens) || 0;
+  const reason = (u && (u.thinking_tokens || u.thoughts_token_count || u.reasoning_tokens)) || 0;
   return {
     prompt_tokens: inp,
     completion_tokens: out,
     total_tokens: inp + out,
     prompt_tokens_details: { cached_tokens: (u && u.cache_read_tokens) || 0 },
-    completion_tokens_details: { reasoning_tokens: (u && u.thinking_tokens) || 0 },
+    completion_tokens_details: { reasoning_tokens: reason },
   };
 }
 
@@ -192,6 +208,7 @@ async function runAgyForAccount(acct, prompt, opts, egress) {
     proxyUrl: egress ? egress.url : undefined,
     timeoutSec: opts.timeoutSec || 300,
     effort: opts.effort,
+    permissionMode: opts.permissionMode || config.permissionMode,
   });
   if (!SERIAL_CRED) return run();
   return auth.withCredLock(async () => {
@@ -200,11 +217,49 @@ async function runAgyForAccount(acct, prompt, opts, egress) {
   });
 }
 
-async function runWithRotation(prompt, opts) {
-  return withSlot(() => runWithRotationInner(prompt, opts));
+function runAgyStreamForAccount(acct, prompt, opts, egress, onEvent) {
+  let abortChild = null;
+  const start = () => {
+    const handle = agy.runStream(prompt, {
+      model: opts.model,
+      cwd: acct.geminiDir || process.cwd(),
+      home: acct.geminiDir || undefined,
+      proxyUrl: egress ? egress.url : undefined,
+      timeoutSec: opts.timeoutSec || 300,
+      effort: opts.effort,
+      permissionMode: opts.permissionMode || config.permissionMode,
+    }, onEvent);
+    abortChild = handle.abort;
+    return handle.promise;
+  };
+
+  if (!SERIAL_CRED) {
+    const p = start();
+    return { promise: p, abort: () => { if (abortChild) abortChild(); } };
+  }
+
+  const promise = auth.withCredLock(async () => {
+    await auth.activateAccountToken(acct);
+    return start();
+  });
+
+  return {
+    promise,
+    abort: () => {
+      if (abortChild) abortChild();
+    },
+  };
 }
 
-async function runWithRotationInner(prompt, opts) {
+async function runWithRotation(prompt, opts) {
+  return runStreamWithRotation(prompt, opts);
+}
+
+async function runStreamWithRotation(prompt, opts, callbacks = {}) {
+  return withSlot(() => runStreamWithRotationInner(prompt, opts, callbacks));
+}
+
+async function runStreamWithRotationInner(prompt, opts, callbacks = {}) {
   const maxTries = config.maxAccountRetries || 4;
   const waitAcctMs = opts.waitAcctMs || 180000;
   const mode = config.rotation === 'lru' ? 'lru' : 'rotate';
@@ -220,23 +275,57 @@ async function runWithRotationInner(prompt, opts) {
     tried.push({ label: acct.label, egress: egress ? egress.host : 'direct' });
 
     const t0 = Date.now();
-    let r;
+    let firstDataEmitted = false;
+    const pendingEvents = [];
+
+    const handleEvent = (ev) => {
+      if (ev.type === 'thought' || ev.type === 'text') {
+        if (!firstDataEmitted) {
+          firstDataEmitted = true;
+          if (callbacks.onFirstData) {
+            callbacks.onFirstData({ account: acct.label, egress: egress ? egress.host : 'direct', usage: ev.usage });
+          }
+          for (const pe of pendingEvents) {
+            if (callbacks.onEvent) callbacks.onEvent(pe);
+          }
+          pendingEvents.length = 0;
+        }
+        if (callbacks.onEvent) callbacks.onEvent(ev);
+      } else if (!firstDataEmitted) {
+        pendingEvents.push(ev);
+      } else {
+        if (callbacks.onEvent) callbacks.onEvent(ev);
+      }
+    };
+
+    let streamHandle;
     try {
-      r = await runAgyForAccount(acct, prompt, opts, egress);
+      streamHandle = runAgyStreamForAccount(acct, prompt, opts, egress, handleEvent);
+      if (callbacks.onStreamStart) {
+        callbacks.onStreamStart({ account: acct.label, egress: egress ? egress.host : 'direct' }, streamHandle.abort);
+      }
     } catch (e) {
+      accounts.release(acct);
       accounts.markError(acct, e.message, config.cooldownMs);
       lastErr = e.message;
       logReq({ t: Date.now(), ok: false, account: acct.label, egress: egress ? egress.host : 'direct', model: opts.model, ms: Date.now() - t0, err: String(e.message).slice(0, 180), proto: opts.proto || '-' });
       continue;
+    }
+
+    let r;
+    try {
+      r = await streamHandle.promise;
+    } catch (e) {
+      r = { ok: false, raw: { err: e.message } };
     } finally {
       accounts.release(acct);
     }
 
-    if (r.ok && r.text && r.text.trim()) {
+    if (r.ok && ((r.text && r.text.trim()) || (r.thoughtText && r.thoughtText.trim()))) {
       accounts.markOk(acct, r.usage, { durationMs: r.durationMs });
       if (egress) proxies.reportOk(egress, r.durationMs);
       logReq({ t: Date.now(), ok: true, account: acct.label, egress: egress ? egress.host : 'direct', model: opts.model, ms: r.durationMs, tokens_in: (r.usage && r.usage.input_tokens) || 0, tokens_out: (r.usage && r.usage.output_tokens) || 0, proto: opts.proto || '-' });
-      return { ok: true, text: r.text, account: acct.label, egress: egress ? egress.host : 'direct', usage: r.usage, durationMs: r.durationMs, tried };
+      return { ok: true, text: r.text, thoughtText: r.thoughtText, account: acct.label, egress: egress ? egress.host : 'direct', usage: r.usage, durationMs: r.durationMs, tried };
     }
 
     const msg = (r.raw && (r.raw.err || r.raw.stderr)) || r.text || 'respon kosong';
@@ -245,6 +334,10 @@ async function runWithRotationInner(prompt, opts) {
     lastErr = msg;
     logReq({ t: Date.now(), ok: false, account: acct.label, egress: egress ? egress.host : 'direct', model: opts.model, ms: Date.now() - t0, err: String(msg).slice(0, 180), proto: opts.proto || '-' });
     if (accounts.isAuthError(msg)) accounts.setDisabled(acct.label, true);
+
+    if (firstDataEmitted && callbacks.onFirstData) {
+      return { ok: false, status: 502, error: msg, tried };
+    }
   }
 
   const status = accounts.isQuotaError(lastErr) ? 429 : 502;
@@ -258,60 +351,104 @@ async function handleOpenAIChat(req, res, body) {
   catch (e) { return sendJson(res, 400, { error: { message: 'JSON tidak valid', type: 'invalid_request_error' } }); }
 
   const model = payload.model || config.defaultModel;
+  const effort = payload.reasoning_effort || payload.effort || (payload.thinking && payload.thinking.effort) || undefined;
   const prompt = openaiMessagesToPrompt(payload.messages);
   if (!prompt) return sendJson(res, 400, { error: { message: 'messages kosong', type: 'invalid_request_error' } });
 
   const wantStream = !!payload.stream;
   const maxTokens = payload.max_tokens || payload.max_completion_tokens;
 
-  const r = await runWithRotation(prompt, { model, timeoutSec: 300, proto: 'openai' });
-  const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
+  if (!wantStream) {
+    const r = await runWithRotation(prompt, { model, effort, timeoutSec: 300, proto: 'openai' });
+    const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
 
-  if (!r.ok) {
-    return sendJson(res, r.status, { error: { message: r.error, type: 'upstream_error', tried: r.tried } }, hdr);
-  }
-
-  const text = r.text;
-  const id = newId('chatcmpl-');
-  const usage = usageFromAgy(r.usage, model);
-
-  if (wantStream) {
-    res.writeHead(200, Object.assign({
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    }, hdr));
-    // kirim per potongan kecil agar klien melihat streaming nyata
-    const chunkSize = 24;
-    const created = nowSec();
-    for (let i = 0; i < text.length; i += chunkSize) {
-      const piece = text.slice(i, i + chunkSize);
-      const ev = {
-        id, object: 'chat.completion.chunk', created, model,
-        choices: [{ index: 0, delta: { content: piece }, finish_reason: null }],
-      };
-      res.write('data: ' + JSON.stringify(ev) + '\n\n');
-      await new Promise(s => setTimeout(s, 8));
+    if (!r.ok) {
+      return sendJson(res, r.status, { error: { message: r.error, type: 'upstream_error', tried: r.tried } }, hdr);
     }
-    const fin = {
-      id, object: 'chat.completion.chunk', created, model,
-      choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+
+    const id = newId('chatcmpl-');
+    const usage = usageFromAgy(r.usage, model);
+    const msg = { role: 'assistant', content: r.text || '' };
+    if (r.thoughtText) {
+      msg.reasoning_content = r.thoughtText;
+      msg.reasoning = r.thoughtText;
+    }
+
+    const resp = {
+      id, object: 'chat.completion', created: nowSec(), model,
+      choices: [{ index: 0, message: msg, finish_reason: 'stop', logprobs: null }],
       usage,
+      system_fingerprint: 'agy-' + (r.account || 'na'),
     };
-    res.write('data: ' + JSON.stringify(fin) + '\n\n');
-    res.write('data: [DONE]\n\n');
-    return res.end();
+    if (maxTokens) resp.usage.completion_tokens = Math.min(resp.usage.completion_tokens, maxTokens);
+    return sendJson(res, 200, resp, hdr);
   }
 
-  const resp = {
-    id, object: 'chat.completion', created: nowSec(), model,
-    choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop', logprobs: null }],
-    usage,
-    system_fingerprint: 'agy-' + (r.account || 'na'),
+  // True streaming mode:
+  const id = newId('chatcmpl-');
+  const created = nowSec();
+  let headersSent = false;
+  let sentRole = false;
+  let activeAbort = null;
+
+  const onAbort = () => {
+    if (activeAbort) activeAbort();
   };
-  if (maxTokens) resp.usage.completion_tokens = Math.min(resp.usage.completion_tokens, maxTokens);
-  return sendJson(res, 200, resp, hdr);
+  req.on('close', onAbort);
+
+  const r = await runStreamWithRotation(prompt, { model, effort, timeoutSec: 300, proto: 'openai' }, {
+    onStreamStart: (streamInfo, abortFn) => {
+      activeAbort = abortFn;
+    },
+    onFirstData: (info) => {
+      headersSent = true;
+      const hdr = {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'X-Agy-Account': info.account || '-',
+        'X-Agy-Egress': info.egress || '-',
+      };
+      res.writeHead(200, hdr);
+    },
+    onEvent: (ev) => {
+      const delta = {};
+      if (!sentRole) {
+        delta.role = 'assistant';
+        sentRole = true;
+      }
+      if (ev.type === 'thought') {
+        delta.reasoning_content = ev.delta;
+        delta.reasoning = ev.delta;
+        delta.content = '';
+      } else if (ev.type === 'text') {
+        delta.content = ev.delta;
+      }
+      const chunk = {
+        id, object: 'chat.completion.chunk', created, model,
+        choices: [{ index: 0, delta, finish_reason: null }],
+      };
+      res.write('data: ' + JSON.stringify(chunk) + '\n\n');
+    },
+  });
+
+  req.off('close', onAbort);
+
+  if (!headersSent) {
+    const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
+    return sendJson(res, r.status || 502, { error: { message: r.error, type: 'upstream_error', tried: r.tried } }, hdr);
+  }
+
+  const usage = usageFromAgy(r.usage, model);
+  const fin = {
+    id, object: 'chat.completion.chunk', created, model,
+    choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+    usage,
+  };
+  res.write('data: ' + JSON.stringify(fin) + '\n\n');
+  res.write('data: [DONE]\n\n');
+  return res.end();
 }
 
 // ---------------- handler Anthropic ----------------
@@ -321,50 +458,123 @@ async function handleAnthropicMessages(req, res, body) {
   catch (e) { return sendJson(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'JSON tidak valid' } }); }
 
   const model = payload.model || config.defaultModel;
+  const effort = payload.effort || (payload.thinking && payload.thinking.type === 'enabled' ? ((payload.thinking.budget_tokens && payload.thinking.budget_tokens <= 2048) ? 'low' : 'high') : undefined);
   const prompt = anthropicToPrompt(payload);
   if (!prompt) return sendJson(res, 400, { type: 'error', error: { type: 'invalid_request_error', message: 'messages kosong' } });
 
   const wantStream = !!payload.stream;
-  const r = await runWithRotation(prompt, { model, timeoutSec: 300, proto: 'anthropic' });
-  const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
 
-  if (!r.ok) return sendJson(res, r.status, { type: 'error', error: { type: 'upstream_error', message: r.error, tried: r.tried } }, hdr);
+  if (!wantStream) {
+    const r = await runWithRotation(prompt, { model, effort, timeoutSec: 300, proto: 'anthropic' });
+    const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
+    if (!r.ok) return sendJson(res, r.status, { type: 'error', error: { type: 'upstream_error', message: r.error, tried: r.tried } }, hdr);
 
-  const text = r.text;
-  const id = newId('msg_');
-  const inp = (r.usage && r.usage.input_tokens) || 0;
-  const out = (r.usage && r.usage.output_tokens) || 0;
+    const id = newId('msg_');
+    const inp = (r.usage && r.usage.input_tokens) || 0;
+    const out = (r.usage && r.usage.output_tokens) || 0;
 
-  if (wantStream) {
-    res.writeHead(200, Object.assign({
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    }, hdr));
-    const send = (ev, data) => res.write('event: ' + ev + '\ndata: ' + JSON.stringify(data) + '\n\n');
-    send('message_start', {
-      type: 'message_start',
-      message: { id, type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: inp, output_tokens: 1 } },
-    });
-    send('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
-    const chunkSize = 24;
-    for (let i = 0; i < text.length; i += chunkSize) {
-      send('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: text.slice(i, i + chunkSize) } });
-      await new Promise(s => setTimeout(s, 8));
+    const content = [];
+    if (r.thoughtText) {
+      content.push({ type: 'thinking', thinking: r.thoughtText });
     }
-    send('content_block_stop', { type: 'content_block_stop', index: 0 });
-    send('message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: out } });
-    send('message_stop', { type: 'message_stop' });
-    return res.end();
+    content.push({ type: 'text', text: r.text || '' });
+
+    return sendJson(res, 200, {
+      id, type: 'message', role: 'assistant', model,
+      content,
+      stop_reason: 'end_turn', stop_sequence: null,
+      usage: { input_tokens: inp, output_tokens: out },
+    }, hdr);
   }
 
-  return sendJson(res, 200, {
-    id, type: 'message', role: 'assistant', model,
-    content: [{ type: 'text', text }],
-    stop_reason: 'end_turn', stop_sequence: null,
-    usage: { input_tokens: inp, output_tokens: out },
-  }, hdr);
+  // True streaming mode for Anthropic:
+  const id = newId('msg_');
+  let headersSent = false;
+  let activeAbort = null;
+  let currentBlockType = null; // 'thinking' | 'text' | null
+  let blockIndex = 0;
+
+  const onAbort = () => { if (activeAbort) activeAbort(); };
+  req.on('close', onAbort);
+
+  const send = (ev, data) => res.write('event: ' + ev + '\ndata: ' + JSON.stringify(data) + '\n\n');
+
+  const r = await runStreamWithRotation(prompt, { model, effort, timeoutSec: 300, proto: 'anthropic' }, {
+    onStreamStart: (streamInfo, abortFn) => {
+      activeAbort = abortFn;
+    },
+    onFirstData: (info) => {
+      headersSent = true;
+      const hdr = {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'X-Agy-Account': info.account || '-',
+        'X-Agy-Egress': info.egress || '-',
+      };
+      res.writeHead(200, hdr);
+      const inp = (info.usage && info.usage.input_tokens) || 0;
+      send('message_start', {
+        type: 'message_start',
+        message: { id, type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: inp, output_tokens: 1 } },
+      });
+    },
+    onEvent: (ev) => {
+      if (ev.type === 'thought') {
+        if (currentBlockType !== 'thinking') {
+          if (currentBlockType === 'text') {
+            send('content_block_stop', { type: 'content_block_stop', index: blockIndex });
+            blockIndex++;
+          }
+          currentBlockType = 'thinking';
+          send('content_block_start', {
+            type: 'content_block_start',
+            index: blockIndex,
+            content_block: { type: 'thinking', thinking: '' },
+          });
+        }
+        send('content_block_delta', {
+          type: 'content_block_delta',
+          index: blockIndex,
+          delta: { type: 'thinking_delta', thinking: ev.delta },
+        });
+      } else if (ev.type === 'text') {
+        if (currentBlockType !== 'text') {
+          if (currentBlockType === 'thinking') {
+            send('content_block_stop', { type: 'content_block_stop', index: blockIndex });
+            blockIndex++;
+          }
+          currentBlockType = 'text';
+          send('content_block_start', {
+            type: 'content_block_start',
+            index: blockIndex,
+            content_block: { type: 'text', text: '' },
+          });
+        }
+        send('content_block_delta', {
+          type: 'content_block_delta',
+          index: blockIndex,
+          delta: { type: 'text_delta', text: ev.delta },
+        });
+      }
+    },
+  });
+
+  req.off('close', onAbort);
+
+  if (!headersSent) {
+    const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
+    return sendJson(res, r.status || 502, { type: 'error', error: { type: 'upstream_error', message: r.error, tried: r.tried } }, hdr);
+  }
+
+  if (currentBlockType !== null) {
+    send('content_block_stop', { type: 'content_block_stop', index: blockIndex });
+  }
+  const out = (r.usage && r.usage.output_tokens) || 0;
+  send('message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: out } });
+  send('message_stop', { type: 'message_stop' });
+  return res.end();
 }
 
 // ---------------- handler Gemini native ----------------
@@ -374,6 +584,7 @@ async function handleGeminiGenerate(req, res, body, stream) {
   catch (e) { return sendJson(res, 400, { error: { code: 400, message: 'JSON tidak valid', status: 'INVALID_ARGUMENT' } }); }
 
   const model = req.url.includes('/models/') ? decodeURIComponent(req.url.split('/models/')[1].split(':')[0]) : config.defaultModel;
+  const effort = payload.effort || (payload.generationConfig && payload.generationConfig.thinkingConfig ? 'high' : undefined);
   const parts = [];
   for (const c of (payload.contents || [])) {
     const t = (c.parts || []).map(p => p.text || '').join('');
@@ -386,43 +597,85 @@ async function handleGeminiGenerate(req, res, body, stream) {
   const prompt = parts.join('\n\n');
   if (!prompt) return sendJson(res, 400, { error: { code: 400, message: 'contents kosong', status: 'INVALID_ARGUMENT' } });
 
-  const r = await runWithRotation(prompt, { model, timeoutSec: 300, proto: 'gemini' });
-  const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
-  if (!r.ok) return sendJson(res, r.status, { error: { code: r.status, message: r.error, status: 'UNAVAILABLE', tried: r.tried } }, hdr);
+  if (!stream) {
+    const r = await runWithRotation(prompt, { model, effort, timeoutSec: 300, proto: 'gemini' });
+    const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
+    if (!r.ok) return sendJson(res, r.status, { error: { code: r.status, message: r.error, status: 'UNAVAILABLE', tried: r.tried } }, hdr);
 
-  const text = r.text;
+    const outParts = [];
+    if (r.thoughtText) {
+      outParts.push({ text: r.thoughtText, thought: true });
+    }
+    outParts.push({ text: r.text || '' });
+
+    const usage = r.usage || {};
+    const out = {
+      candidates: [{ content: { role: 'model', parts: outParts }, finishReason: 'STOP', index: 0 }],
+      usageMetadata: {
+        promptTokenCount: usage.input_tokens || 0,
+        candidatesTokenCount: usage.output_tokens || 0,
+        totalTokenCount: (usage.input_tokens || 0) + (usage.output_tokens || 0),
+      },
+      modelVersion: model,
+    };
+    return sendJson(res, 200, out, hdr);
+  }
+
+  // True streaming mode for Gemini:
+  let headersSent = false;
+  let activeAbort = null;
+
+  const onAbort = () => { if (activeAbort) activeAbort(); };
+  req.on('close', onAbort);
+
+  const r = await runStreamWithRotation(prompt, { model, effort, timeoutSec: 300, proto: 'gemini' }, {
+    onStreamStart: (streamInfo, abortFn) => {
+      activeAbort = abortFn;
+    },
+    onFirstData: (info) => {
+      headersSent = true;
+      const hdr = {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'X-Agy-Account': info.account || '-',
+        'X-Agy-Egress': info.egress || '-',
+      };
+      res.writeHead(200, hdr);
+    },
+    onEvent: (ev) => {
+      if (ev.type === 'thought') {
+        res.write('data: ' + JSON.stringify({
+          candidates: [{ content: { role: 'model', parts: [{ text: ev.delta, thought: true }] }, index: 0 }],
+          modelVersion: model,
+        }) + '\n\n');
+      } else if (ev.type === 'text') {
+        res.write('data: ' + JSON.stringify({
+          candidates: [{ content: { role: 'model', parts: [{ text: ev.delta }] }, index: 0 }],
+          modelVersion: model,
+        }) + '\n\n');
+      }
+    },
+  });
+
+  req.off('close', onAbort);
+
+  if (!headersSent) {
+    const hdr = { 'X-Agy-Account': r.account || '-', 'X-Agy-Egress': r.egress || '-' };
+    return sendJson(res, r.status || 502, { error: { code: r.status, message: r.error, status: 'UNAVAILABLE', tried: r.tried } }, hdr);
+  }
+
   const usage = r.usage || {};
-  const out = {
-    candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0 }],
+  res.write('data: ' + JSON.stringify({
+    candidates: [{ content: { role: 'model', parts: [{ text: '' }] }, finishReason: 'STOP', index: 0 }],
     usageMetadata: {
       promptTokenCount: usage.input_tokens || 0,
       candidatesTokenCount: usage.output_tokens || 0,
       totalTokenCount: (usage.input_tokens || 0) + (usage.output_tokens || 0),
     },
     modelVersion: model,
-  };
-
-  if (stream) {
-    res.writeHead(200, Object.assign({
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no',
-    }, hdr));
-    const chunkSize = 24;
-    for (let i = 0; i < text.length; i += chunkSize) {
-      res.write('data: ' + JSON.stringify({
-        candidates: [{ content: { role: 'model', parts: [{ text: text.slice(i, i + chunkSize) }] }, index: 0 }],
-        modelVersion: model,
-      }) + '\n\n');
-      await new Promise(s => setTimeout(s, 8));
-    }
-    res.write('data: ' + JSON.stringify({
-      candidates: [{ content: { role: 'model', parts: [{ text: '' }] }, finishReason: 'STOP', index: 0 }],
-      usageMetadata: out.usageMetadata,
-      modelVersion: model,
-    }) + '\n\n');
-    return res.end();
-  }
-  return sendJson(res, 200, out, hdr);
+  }) + '\n\n');
+  return res.end();
 }
 
 // ---------------- admin ----------------
@@ -445,7 +698,7 @@ function handleAdmin(req, res, urlPath, urlObj) {
   if (urlPath === '/admin/state' && req.method === 'GET') {
     return sendJson(res, 200, {
       port: PORT, version: '1.1.1', agy: agy.AGY,
-      config: { rotation: config.rotation, defaultModel: config.defaultModel, cooldownMs: config.cooldownMs, maxAccountRetries: config.maxAccountRetries, apiKeySet: !!config.apiKey, listenHost: HOST, maxInflight: MAX_INFLIGHT },
+      config: { rotation: config.rotation, defaultModel: config.defaultModel, permissionMode: config.permissionMode || 'skip', cooldownMs: config.cooldownMs, maxAccountRetries: config.maxAccountRetries, apiKeySet: !!config.apiKey, listenHost: HOST, maxInflight: MAX_INFLIGHT },
       accounts: { summary: accounts.summary(), items: accounts.stats(), busy: accounts.busyCount() },
       egress: proxies.stats(),
       models: MODEL_CACHE,
@@ -485,11 +738,12 @@ function handleAdmin(req, res, urlPath, urlObj) {
       try { o = JSON.parse(b || '{}'); } catch (e) { return sendJson(res, 400, { error: 'JSON tidak valid' }); }
       if (o.rotation === 'lru' || o.rotation === 'rotate') config.rotation = o.rotation;
       if (typeof o.defaultModel === 'string' && o.defaultModel) config.defaultModel = o.defaultModel;
+      if (['skip', 'accept-edits', 'plan'].includes(o.permissionMode)) config.permissionMode = o.permissionMode;
       if (typeof o.cooldownMs === 'number' && o.cooldownMs >= 0) config.cooldownMs = o.cooldownMs;
       if (typeof o.maxAccountRetries === 'number' && o.maxAccountRetries >= 1) config.maxAccountRetries = o.maxAccountRetries;
       if (typeof o.listenHost === 'string' && o.listenHost) config.listenHost = o.listenHost;
       try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); } catch (e) {}
-      return sendJson(res, 200, { ok: true, config: { rotation: config.rotation, defaultModel: config.defaultModel, cooldownMs: config.cooldownMs, maxAccountRetries: config.maxAccountRetries } });
+      return sendJson(res, 200, { ok: true, config: { rotation: config.rotation, defaultModel: config.defaultModel, permissionMode: config.permissionMode, cooldownMs: config.cooldownMs, maxAccountRetries: config.maxAccountRetries } });
     });
   }
   if (urlPath === '/admin/playground' && req.method === 'POST') {
@@ -711,7 +965,7 @@ if (!accounts.all().length) {
   accounts.all().push({
     label: 'primary',
     credTarget: 'gemini:antigravity',
-    geminiDir: process.cwd(),
+    geminiDir: process.env.HOME || process.env.USERPROFILE || process.cwd(),
     disabled: false, cooldown_until: 0,
     requests: 0, errors: 0, tokens_in: 0, tokens_out: 0, last_used: 0,
     last_error: null, ok_count: 0, last_ms: 0,

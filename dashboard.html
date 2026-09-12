@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -32,6 +32,11 @@
     .logo { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg,#3dd68c,#5eb1ff); }
     .hdr-meta { color: var(--muted); font-size: 12px; }
     .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .lang-select {
+      background: #151a22; border: 1px solid var(--line); color: var(--txt);
+      border-radius: 8px; padding: 4px 8px; font-size: 11.5px; cursor: pointer; outline: none;
+    }
+    .lang-select:hover { border-color: var(--acc2); }
     nav { border-right: 1px solid var(--line); background: var(--surface); padding: 12px; overflow: auto; }
     .nav-btn {
       width: 100%; text-align: left; background: transparent; border: 0; color: var(--muted);
@@ -118,83 +123,87 @@
       <div class="hdr-right">
         <span class="pill" id="statusPill">loading</span>
         <span class="pill" id="egPill">egress off</span>
-        <label class="switch" title="Egress on/off">
+        <label class="switch" id="egSwitchWrap" title="Egress on/off" data-i18n-title="egress_toggle">
           <input type="checkbox" id="egSwitch" />
           <span class="slider"></span>
         </label>
+        <select id="langSelect" class="lang-select" aria-label="Language">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
       </div>
     </header>
     <nav>
-      <button class="nav-btn active" data-view="chat">Chat</button>
-      <button class="nav-btn" data-view="requests">Requests</button>
-      <button class="nav-btn" data-view="models">Models</button>
-      <button class="nav-btn" data-view="proxies">Proxies</button>
-      <button class="nav-btn" data-view="accounts">Accounts</button>
-      <button class="nav-btn" data-view="quota">Quota</button>
-      <button class="nav-btn" data-view="settings">Settings</button>
+      <button class="nav-btn active" data-view="chat" data-i18n="nav_chat">对话</button>
+      <button class="nav-btn" data-view="requests" data-i18n="nav_requests">请求统计</button>
+      <button class="nav-btn" data-view="models" data-i18n="nav_models">模型列表</button>
+      <button class="nav-btn" data-view="proxies" data-i18n="nav_proxies">代理池</button>
+      <button class="nav-btn" data-view="accounts" data-i18n="nav_accounts">账号管理</button>
+      <button class="nav-btn" data-view="quota" data-i18n="nav_quota">额度查询</button>
+      <button class="nav-btn" data-view="settings" data-i18n="nav_settings">系统设置</button>
     </nav>
     <main>
       <section class="view active" id="view-chat">
         <div class="toolbar">
-          <h2>Chat</h2>
+          <h2 data-i18n="nav_chat">对话</h2>
           <select id="pg-model" style="width:260px"></select>
         </div>
         <div class="msgs" id="msgs"></div>
         <div class="composer">
           <div class="composer-inner">
-            <textarea id="pg-prompt" placeholder="Ketik pesan… Enter kirim, Shift+Enter baris baru"></textarea>
-            <button class="btn" id="btnSend">Kirim</button>
+            <textarea id="pg-prompt" placeholder="输入消息… Enter 发送，Shift+Enter 换行" data-i18n-placeholder="chat_placeholder"></textarea>
+            <button class="btn" id="btnSend" data-i18n="chat_send">发送</button>
           </div>
         </div>
       </section>
 
       <section class="view" id="view-requests">
         <div class="toolbar">
-          <h2>Requests</h2>
-          <button class="btn ghost" id="btnReqRefresh">Refresh</button>
+          <h2 data-i18n="req_title">请求统计</h2>
+          <button class="btn ghost" id="btnReqRefresh" data-i18n="refresh">刷新</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Periode</th><th>Request</th><th>OK</th><th>Err</th>
-                <th>Token in</th><th>Token out</th><th>Total token</th>
+                <th data-i18n="th_period">时间周期</th><th data-i18n="th_req">请求数</th><th data-i18n="th_ok">成功</th><th data-i18n="th_err">错误</th>
+                <th data-i18n="th_tok_in">输入 Token</th><th data-i18n="th_tok_out">输出 Token</th><th data-i18n="th_tok_total">总 Token</th>
               </tr>
             </thead>
             <tbody id="usageWindows"></tbody>
           </table>
-          <h3 style="font-size:13px;margin:18px 0 8px;font-weight:600">Model dipakai</h3>
+          <h3 style="font-size:13px;margin:18px 0 8px;font-weight:600" data-i18n="req_models_usage">模型使用分布</h3>
           <table>
             <thead>
               <tr>
-                <th>Model</th><th>Request</th><th>OK</th><th>Err</th>
-                <th>Token in</th><th>Token out</th><th>Total</th>
+                <th data-i18n="th_model">模型</th><th data-i18n="th_req">请求数</th><th data-i18n="th_ok">成功</th><th data-i18n="th_err">错误</th>
+                <th data-i18n="th_tok_in">输入 Token</th><th data-i18n="th_tok_out">输出 Token</th><th data-i18n="th_total">总计</th>
               </tr>
             </thead>
             <tbody id="usageModels"></tbody>
           </table>
-          <h3 style="font-size:13px;margin:18px 0 8px;font-weight:600">Log terakhir</h3>
+          <h3 style="font-size:13px;margin:18px 0 8px;font-weight:600" data-i18n="req_recent_logs">最近请求日志</h3>
           <table>
             <thead>
               <tr>
-                <th>Waktu</th><th>OK</th><th>Akun</th><th>Model</th><th>Egress</th>
-                <th>In</th><th>Out</th><th>ms</th><th>Err</th>
+                <th data-i18n="th_time">时间</th><th data-i18n="th_ok">状态</th><th data-i18n="th_account">账号</th><th data-i18n="th_model">模型</th><th data-i18n="th_egress">出口代理</th>
+                <th data-i18n="th_in">输入</th><th data-i18n="th_out">输出</th><th>ms</th><th data-i18n="th_err">错误</th>
               </tr>
             </thead>
             <tbody id="reqRows"></tbody>
           </table>
-          <div class="empty" id="reqEmpty">Belum ada request.</div>
+          <div class="empty" id="reqEmpty" data-i18n="req_empty">暂无请求记录。</div>
         </div>
       </section>
 
       <section class="view" id="view-models">
         <div class="toolbar">
-          <h2>Models</h2>
+          <h2 data-i18n="nav_models">模型列表</h2>
           <span class="pill" id="m-sub">0</span>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>ID</th><th>Label</th></tr></thead>
+            <thead><tr><th data-i18n="th_id">ID</th><th data-i18n="th_label">名称</th></tr></thead>
             <tbody id="modelRows"></tbody>
           </table>
         </div>
@@ -202,74 +211,74 @@
 
       <section class="view" id="view-proxies">
         <div class="toolbar">
-          <h2>HTTP proxies</h2>
+          <h2 data-i18n="proxies_title">HTTP 代理池</h2>
           <span class="pill" id="egMeta">0</span>
           <select id="eg-mode" style="width:160px">
-            <option value="rotate">rotate</option>
-            <option value="sticky">sticky</option>
-            <option value="random">random</option>
+            <option value="rotate" data-i18n="mode_rotate">轮询 (rotate)</option>
+            <option value="sticky" data-i18n="mode_sticky">粘性 (sticky)</option>
+            <option value="random" data-i18n="mode_random">随机 (random)</option>
           </select>
-          <button class="btn ghost" id="btnEgCheck">Health check</button>
-          <button class="btn bad" id="btnEgClear">Hapus semua</button>
+          <button class="btn ghost" id="btnEgCheck" data-i18n="btn_health_check">健康检查</button>
+          <button class="btn bad" id="btnEgClear" data-i18n="btn_clear_all">清空全部</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>#</th><th>Host</th><th>Status</th><th>Fails</th><th>Latensi</th><th>IP</th><th style="width:90px"></th>
+                <th>#</th><th data-i18n="th_host">主机</th><th data-i18n="th_status">状态</th><th data-i18n="th_fails">失败数</th><th data-i18n="th_latency">延迟</th><th data-i18n="th_ip">出口 IP</th><th style="width:90px" data-i18n="th_action">操作</th>
               </tr>
             </thead>
             <tbody id="egRows"></tbody>
           </table>
-          <div class="empty" id="egEmpty">Belum ada proxy. Tempel list di bawah.</div>
+          <div class="empty" id="egEmpty" data-i18n="proxies_empty">暂无代理。请在下方批量添加。</div>
         </div>
         <div class="add-box">
           <div style="display:flex;gap:8px;align-items:flex-start">
-            <textarea id="p-bulk" placeholder="host:port:user:pass — satu per baris. Boleh koma."></textarea>
+            <textarea id="p-bulk" placeholder="host:port:user:pass — 每行一个代理，支持逗号或冒号分隔。" data-i18n-placeholder="proxies_bulk_placeholder"></textarea>
             <div style="display:flex;flex-direction:column;gap:8px;min-width:140px">
-              <button class="btn" id="btnEgAdd">Tambah</button>
-              <button class="btn ghost" id="btnEgAddCheck">Tambah &amp; cek</button>
+              <button class="btn" id="btnEgAdd" data-i18n="btn_add">添加</button>
+              <button class="btn ghost" id="btnEgAddCheck" data-i18n="btn_add_check">添加并检查</button>
             </div>
           </div>
-          <div class="hint">Satu baris = satu proxy. Password tidak ditampilkan di tabel.</div>
+          <div class="hint" data-i18n="proxies_hint">每行一个代理。密码不会在表格中明文显示。</div>
         </div>
       </section>
 
       <section class="view" id="view-accounts">
         <div class="toolbar">
-          <h2>Accounts</h2>
-          <span class="pill" id="acct-sub">0 akun</span>
-          <button class="btn" id="btnLogin">Login (link + kode)</button>
-          <button class="btn ghost" id="btnProbe">Probe</button>
-          <button class="btn ghost" id="btnCdReset">Reset cooldown</button>
+          <h2 data-i18n="nav_accounts">账号管理</h2>
+          <span class="pill" id="acct-sub">0</span>
+          <button class="btn" id="btnLogin" data-i18n="btn_login_oauth">添加账号 (OAuth登录)</button>
+          <button class="btn ghost" id="btnProbe" data-i18n="btn_probe">连通性探测</button>
+          <button class="btn ghost" id="btnCdReset" data-i18n="btn_cd_reset">重置冷却</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Label</th><th>Email</th><th>Status</th><th>Req</th><th>OK</th><th>Err</th>
-                <th>Token in</th><th>Token out</th><th>Terakhir</th><th></th>
+                <th data-i18n="th_label">标签</th><th data-i18n="th_email">邮箱</th><th data-i18n="th_status">状态</th><th data-i18n="th_req">请求</th><th data-i18n="th_ok">成功</th><th data-i18n="th_err">失败</th>
+                <th data-i18n="th_tok_in">输入 Token</th><th data-i18n="th_tok_out">输出 Token</th><th data-i18n="th_last_used">最近调用</th><th data-i18n="th_action">操作</th>
               </tr>
             </thead>
             <tbody id="acctRows"></tbody>
           </table>
-          <div class="empty" id="acctEmpty">Belum ada akun.</div>
+          <div class="empty" id="acctEmpty" data-i18n="acct_empty">暂无账号。</div>
           <div id="loginPanel" class="login-box" style="display:none">
-            <div class="hint" style="margin:0 0 8px">1. Isi label → buat link. 2. Buka, login Google (maks ~50 detik). 3. Tempel URL redirect (<span class="mono">oauth-callback?code=...</span>) atau code, lalu Simpan segera.</div>
+            <div class="hint" style="margin:0 0 8px" data-i18n="login_hint">1. 输入标签 → 生成授权链接。 2. 打开链接登录 Google（有效期约 50 秒）。 3. 粘贴重定向 URL (oauth-callback?code=...) 或 code，立即保存。</div>
             <div style="display:flex;gap:8px;margin-bottom:8px">
-              <input type="text" id="a-label" placeholder="label, misal gmail-2" style="flex:1" />
-              <button class="btn" id="btnMakeLink">Buat link</button>
+              <input type="text" id="a-label" placeholder="账号标签，如 gmail-2" data-i18n-placeholder="login_label_placeholder" style="flex:1" />
+              <button class="btn" id="btnMakeLink" data-i18n="btn_make_link">生成链接</button>
             </div>
             <div id="login-box" style="display:none">
-              <div class="muted" style="font-size:11px;margin-bottom:6px">Buka link ini:</div>
+              <div class="muted" style="font-size:11px;margin-bottom:6px" data-i18n="login_open_hint">在浏览器中打开此授权链接：</div>
               <div class="login-url mono" id="login-url"></div>
               <div style="display:flex;gap:8px;margin:8px 0">
-                <button class="btn ghost" id="btnCopyUrl">Salin</button>
-                <a id="login-open" target="_blank" rel="noopener"><button class="btn ghost">Buka tab</button></a>
+                <button class="btn ghost" id="btnCopyUrl" data-i18n="btn_copy">复制</button>
+                <a id="login-open" target="_blank" rel="noopener"><button class="btn ghost" data-i18n="btn_open_tab">新标签页打开</button></a>
               </div>
               <div style="display:flex;gap:8px">
-                <input type="text" id="a-code" placeholder="tempel URL redirect atau code" style="flex:1" />
-                <button class="btn" id="btnSaveAcct">Simpan akun</button>
+                <input type="text" id="a-code" placeholder="粘贴重定向 URL 或 authorization code" data-i18n-placeholder="login_code_placeholder" style="flex:1" />
+                <button class="btn" id="btnSaveAcct" data-i18n="btn_save_acct">保存账号</button>
               </div>
             </div>
           </div>
@@ -278,47 +287,57 @@
 
       <section class="view" id="view-quota">
         <div class="toolbar">
-          <h2>Quota</h2>
+          <h2 data-i18n="nav_quota">额度查询</h2>
           <span class="pill" id="quotaMeta">auto</span>
-          <button class="btn ghost" id="btnQuotaForce">Force refresh</button>
+          <button class="btn ghost" id="btnQuotaForce" data-i18n="btn_force_refresh">强制刷新</button>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Akun</th>
-                <th>Email</th>
-                <th>Credits</th>
-                <th>Gemini 5h</th>
-                <th>Gemini week</th>
-                <th>Claude/GPT 5h</th>
-                <th>Claude/GPT week</th>
+                <th data-i18n="th_account">账号</th>
+                <th data-i18n="th_email">邮箱</th>
+                <th data-i18n="th_credits">积分/额度</th>
+                <th data-i18n="th_gemini_5h">Gemini 5小时</th>
+                <th data-i18n="th_gemini_week">Gemini 周额度</th>
+                <th data-i18n="th_other_5h">Claude/GPT 5小时</th>
+                <th data-i18n="th_other_week">Claude/GPT 周额度</th>
                 <th>ms</th>
               </tr>
             </thead>
             <tbody id="quotaRows"></tbody>
           </table>
-          <div class="empty" id="quotaEmpty">Mengambil quota semua akun…</div>
+          <div class="empty" id="quotaEmpty" data-i18n="quota_fetching">正在查询所有账号额度…</div>
         </div>
       </section>
 
       <section class="view" id="view-settings">
-        <div class="toolbar"><h2>Settings</h2></div>
+        <div class="toolbar"><h2 data-i18n="nav_settings">系统设置</h2></div>
         <div class="grid2">
           <div class="card">
-            <h3>OpenAI endpoint</h3>
-            <div class="kv">Base URL<b class="mono" id="baseUrl">http://127.0.0.1:1413/v1</b></div>
-            <div class="kv">API key<b class="mono">sk-agy-local</b></div>
-            <div class="kv">Anthropic<b class="mono">POST /v1/messages</b></div>
-            <div class="kv">Gemini native<b class="mono">POST /v1beta/models/{m}:generateContent</b></div>
+            <h3 data-i18n="s_endpoints">API 接入端点</h3>
+            <div class="kv"><span data-i18n="s_base_url">Base URL</span><b class="mono" id="baseUrl">http://127.0.0.1:1413/v1</b></div>
+            <div class="kv"><span data-i18n="s_api_key">API key</span><b class="mono">sk-agy-local</b></div>
+            <div class="kv"><span>Anthropic</span><b class="mono">POST /v1/messages</b></div>
+            <div class="kv"><span>Gemini native</span><b class="mono">POST /v1beta/models/{m}:generateContent</b></div>
           </div>
           <div class="card">
-            <h3>Upstream</h3>
-            <div class="kv">agy.exe<b class="mono" id="agyPath">—</b></div>
-            <div class="kv">Rotasi<b id="rotText">rotate</b></div>
-            <div class="kv">Default model<b class="mono" id="defModel">—</b></div>
-            <div class="kv">In-flight<b id="inflightText">—</b></div>
-            <div class="kv">Uptime<b id="uptimeText">—</b></div>
+            <h3 data-i18n="s_upstream">上游服务与配置</h3>
+            <div class="kv"><span data-i18n="s_agy_bin">CLI 核心路径</span><b class="mono" id="agyPath">—</b></div>
+            <div class="kv"><span data-i18n="s_rotation">账号轮询策略</span><b id="rotText">rotate</b></div>
+            <div class="kv"><span data-i18n="s_def_model">默认模型</span><b class="mono" id="defModel">—</b></div>
+            <div class="kv">
+              <span data-i18n="s_perm_mode">权限执行模式 (Permission Mode)</span>
+              <div style="margin-top:5px">
+                <select id="permModeSelect" style="width:100%;font-size:12px;padding:5px 8px;">
+                  <option value="skip" data-i18n="perm_skip">skip (全自动/无人值守跳过权限)</option>
+                  <option value="accept-edits" data-i18n="perm_accept_edits">accept-edits (自动确认代码修改)</option>
+                  <option value="plan" data-i18n="perm_plan">plan (只读计划模式)</option>
+                </select>
+              </div>
+            </div>
+            <div class="kv"><span data-i18n="s_inflight">并发限制 (In-flight)</span><b id="inflightText">—</b></div>
+            <div class="kv"><span data-i18n="s_uptime">运行时间 (Uptime)</span><b id="uptimeText">—</b></div>
           </div>
         </div>
       </section>
@@ -326,17 +345,356 @@
   </div>
   <div class="toast" id="toast"></div>
   <script>
+    const I18N = {
+      zh: {
+        nav_chat: '对话',
+        nav_requests: '请求统计',
+        nav_models: '模型列表',
+        nav_proxies: '代理池',
+        nav_accounts: '账号管理',
+        nav_quota: '额度查询',
+        nav_settings: '系统设置',
+
+        egress_toggle: '出口代理 开/关',
+        loading: '加载中...',
+        egress_on: '出口代理开启',
+        egress_off: '出口代理关闭',
+        status_summary: '{usable}/{total} 账号 · 忙碌 {busy} · {reqs} 请求',
+
+        chat_title: '对话',
+        chat_placeholder: '输入消息… Enter 发送，Shift+Enter 换行',
+        chat_send: '发送',
+
+        req_title: '请求统计',
+        refresh: '刷新',
+        req_models_usage: '模型使用分布',
+        req_recent_logs: '最近请求日志',
+        req_empty: '暂无请求记录。',
+        th_period: '时间周期',
+        th_req: '请求数',
+        th_ok: '成功',
+        th_err: '错误',
+        th_tok_in: '输入 Token',
+        th_tok_out: '输出 Token',
+        th_tok_total: '总 Token',
+        th_model: '模型',
+        th_total: '总计',
+        th_time: '时间',
+        th_account: '账号',
+        th_egress: '出口代理',
+        th_in: '输入',
+        th_out: '输出',
+        period_1d: '1天',
+        period_7d: '7天',
+        period_30d: '30天',
+        period_all: '全部',
+        none_yet: '暂无数据',
+
+        models_title: '模型列表',
+        models_count: '{n} 个模型',
+        th_id: 'ID',
+        th_label: '名称',
+
+        proxies_title: 'HTTP 代理池',
+        mode_rotate: '轮询 (rotate)',
+        mode_sticky: '粘性 (sticky)',
+        mode_random: '随机 (random)',
+        btn_health_check: '健康检查',
+        btn_clear_all: '清空全部',
+        th_host: '主机',
+        th_status: '状态',
+        th_fails: '失败数',
+        th_latency: '延迟',
+        th_ip: '出口 IP',
+        th_action: '操作',
+        proxies_empty: '暂无代理。请在下方批量添加。',
+        proxies_bulk_placeholder: 'host:port:user:pass — 每行一个代理，支持逗号或冒号分隔。',
+        btn_add: '添加',
+        btn_add_check: '添加并检查',
+        proxies_hint: '每行一个代理。密码不会在表格中明文显示。',
+        st_ok: '正常',
+        st_dead: '失效',
+        btn_del: '删除',
+
+        accounts_title: '账号管理',
+        accts_count: '{n} 个账号',
+        btn_login_oauth: '添加账号 (OAuth登录)',
+        btn_probe: '连通性探测',
+        btn_cd_reset: '重置冷却',
+        th_email: '邮箱',
+        th_last_used: '最近调用',
+        acct_empty: '暂无账号。',
+        login_hint: '1. 输入标签 → 生成授权链接。 2. 打开链接登录 Google（有效期约 50 秒）。 3. 粘贴重定向 URL (oauth-callback?code=...) 或 code，立即保存。',
+        login_label_placeholder: '账号标签，如 gmail-2',
+        btn_make_link: '生成链接',
+        login_open_hint: '在浏览器中打开此授权链接：',
+        btn_copy: '复制',
+        btn_open_tab: '新标签页打开',
+        login_code_placeholder: '粘贴重定向 URL 或 authorization code',
+        btn_save_acct: '保存账号',
+        st_disabled: '已禁用',
+        st_cooldown: '冷却中 {s}s',
+        st_ready: '就绪',
+        btn_enable: '启用',
+        btn_disable: '禁用',
+
+        quota_title: '额度查询',
+        btn_force_refresh: '强制刷新',
+        th_credits: '积分/额度',
+        th_gemini_5h: 'Gemini 5小时',
+        th_gemini_week: 'Gemini 周额度',
+        th_other_5h: 'Claude/GPT 5小时',
+        th_other_week: 'Claude/GPT 周额度',
+        quota_fetching: '正在查询所有账号额度…',
+        quota_cached: '缓存 {s}s',
+        quota_fresh: '实时',
+        net_error: '网络请求失败',
+
+        settings_title: '系统设置',
+        s_endpoints: 'API 接入端点',
+        s_base_url: 'Base URL',
+        s_api_key: 'API Key',
+        s_upstream: '上游服务与配置',
+        s_agy_bin: 'CLI 核心路径',
+        s_rotation: '账号轮询策略',
+        s_def_model: '默认模型',
+        s_perm_mode: '权限执行模式 (Permission Mode)',
+        perm_skip: 'skip (全自动/无人值守跳过权限)',
+        perm_accept_edits: 'accept-edits (自动确认代码修改)',
+        perm_plan: 'plan (只读计划模式)',
+        s_inflight: '并发限制 (In-flight)',
+        s_uptime: '运行时间 (Uptime)',
+
+        confirm_del_acct: '确定要删除账号 "{label}" 吗？',
+        confirm_del_proxy: '确定要删除代理 #{id} 吗？',
+        confirm_clear_proxies: '确定要清空所有代理吗？',
+        toast_running: '正在执行 {p} ...',
+        toast_done: '执行成功: {info}',
+        toast_failed: '执行失败: {info}',
+        toast_acct_deleted: '账号已删除: {label}',
+        toast_proxy_deleted: '代理已删除',
+        toast_paste_proxy: '请先粘贴代理列表',
+        toast_bulk_added: '已添加 {added}，跳过 {skipped}，错误 {errors}',
+        toast_label_req: '账号标签不能为空',
+        toast_link_ready: '授权链接已生成 — 请打开登录并粘贴重定向 URL',
+        toast_label_empty: '账号标签为空',
+        toast_paste_code: '请粘贴重定向 URL 或 code',
+        toast_exchanging: '正在换取 Token...',
+        toast_acct_saved: '账号添加成功: {email}',
+        toast_no_refresh: ' (无 refresh_token)',
+        toast_link_copied: '链接已复制到剪贴板',
+        toast_copy_failed: '复制失败',
+        toast_prompt_req: '请输入提示词',
+        toast_egress_mode: '出口代理模式: {mode}',
+        toast_egress_on: '出口代理已开启',
+        toast_egress_off: '出口代理已关闭',
+        toast_proxies_cleared: '已清空 {removed} 个代理',
+        toast_perm_saved: '权限模式已更新: {mode}',
+        failed: '失败'
+      },
+      en: {
+        nav_chat: 'Chat',
+        nav_requests: 'Requests',
+        nav_models: 'Models',
+        nav_proxies: 'Proxies',
+        nav_accounts: 'Accounts',
+        nav_quota: 'Quota',
+        nav_settings: 'Settings',
+
+        egress_toggle: 'Egress on/off',
+        loading: 'loading...',
+        egress_on: 'egress on',
+        egress_off: 'egress off',
+        status_summary: '{usable}/{total} accounts · busy {busy} · {reqs} reqs',
+
+        chat_title: 'Chat',
+        chat_placeholder: 'Type a message… Enter to send, Shift+Enter for new line',
+        chat_send: 'Send',
+
+        req_title: 'Requests',
+        refresh: 'Refresh',
+        req_models_usage: 'Model Usage',
+        req_recent_logs: 'Recent Logs',
+        req_empty: 'No requests yet.',
+        th_period: 'Period',
+        th_req: 'Requests',
+        th_ok: 'OK',
+        th_err: 'Err',
+        th_tok_in: 'Tokens In',
+        th_tok_out: 'Tokens Out',
+        th_tok_total: 'Total Tokens',
+        th_model: 'Model',
+        th_total: 'Total',
+        th_time: 'Time',
+        th_account: 'Account',
+        th_egress: 'Egress',
+        th_in: 'In',
+        th_out: 'Out',
+        period_1d: '1 day',
+        period_7d: '7 days',
+        period_30d: '30 days',
+        period_all: 'All time',
+        none_yet: 'None yet',
+
+        models_title: 'Models',
+        models_count: '{n} models',
+        th_id: 'ID',
+        th_label: 'Label',
+
+        proxies_title: 'HTTP Proxies',
+        mode_rotate: 'rotate',
+        mode_sticky: 'sticky',
+        mode_random: 'random',
+        btn_health_check: 'Health check',
+        btn_clear_all: 'Clear all',
+        th_host: 'Host',
+        th_status: 'Status',
+        th_fails: 'Fails',
+        th_latency: 'Latency',
+        th_ip: 'Egress IP',
+        th_action: 'Action',
+        proxies_empty: 'No proxies yet. Paste list below.',
+        proxies_bulk_placeholder: 'host:port:user:pass — one per line. Comma separated also supported.',
+        btn_add: 'Add',
+        btn_add_check: 'Add & check',
+        proxies_hint: 'One line per proxy. Passwords are not displayed in table.',
+        st_ok: 'ok',
+        st_dead: 'dead',
+        btn_del: 'delete',
+
+        accounts_title: 'Accounts',
+        accts_count: '{n} accounts',
+        btn_login_oauth: 'Add Account (OAuth)',
+        btn_probe: 'Probe',
+        btn_cd_reset: 'Reset cooldown',
+        th_email: 'Email',
+        th_last_used: 'Last Used',
+        acct_empty: 'No accounts yet.',
+        login_hint: '1. Enter label → make link. 2. Open & login to Google (~50s window). 3. Paste redirect URL (oauth-callback?code=...) or code, then Save immediately.',
+        login_label_placeholder: 'label, e.g. gmail-2',
+        btn_make_link: 'Generate link',
+        login_open_hint: 'Open this link in your browser:',
+        btn_copy: 'Copy',
+        btn_open_tab: 'Open tab',
+        login_code_placeholder: 'paste redirect URL or code',
+        btn_save_acct: 'Save account',
+        st_disabled: 'disabled',
+        st_cooldown: 'cooldown {s}s',
+        st_ready: 'ready',
+        btn_enable: 'enable',
+        btn_disable: 'disable',
+
+        quota_title: 'Quota',
+        btn_force_refresh: 'Force refresh',
+        th_credits: 'Credits',
+        th_gemini_5h: 'Gemini 5h',
+        th_gemini_week: 'Gemini Week',
+        th_other_5h: 'Claude/GPT 5h',
+        th_other_week: 'Claude/GPT Week',
+        quota_fetching: 'Fetching quota for all accounts…',
+        quota_cached: 'cached {s}s',
+        quota_fresh: 'fresh',
+        net_error: 'Network error',
+
+        settings_title: 'Settings',
+        s_endpoints: 'API Endpoints',
+        s_base_url: 'Base URL',
+        s_api_key: 'API Key',
+        s_upstream: 'Upstream & Config',
+        s_agy_bin: 'CLI Binary Path',
+        s_rotation: 'Account Rotation',
+        s_def_model: 'Default Model',
+        s_perm_mode: 'Permission Mode',
+        perm_skip: 'skip (dangerously skip permissions)',
+        perm_accept_edits: 'accept-edits (auto accept file edits)',
+        perm_plan: 'plan (read-only plan mode)',
+        s_inflight: 'In-flight',
+        s_uptime: 'Uptime',
+
+        confirm_del_acct: 'Delete account "{label}"?',
+        confirm_del_proxy: 'Delete proxy #{id}?',
+        confirm_clear_proxies: 'Delete ALL proxies?',
+        toast_running: 'running {p} ...',
+        toast_done: 'done: {info}',
+        toast_failed: 'failed: {info}',
+        toast_acct_deleted: 'account deleted: {label}',
+        toast_proxy_deleted: 'proxy deleted',
+        toast_paste_proxy: 'paste proxy list first',
+        toast_bulk_added: 'added {added}  skipped {skipped}  err {errors}',
+        toast_label_req: 'label is required',
+        toast_link_ready: 'link ready — open, login, paste redirect URL',
+        toast_label_empty: 'label is empty',
+        toast_paste_code: 'paste redirect URL or code',
+        toast_exchanging: 'exchanging code...',
+        toast_acct_saved: 'account added: {email}',
+        toast_no_refresh: ' (no refresh_token)',
+        toast_link_copied: 'link copied to clipboard',
+        toast_copy_failed: 'failed to copy',
+        toast_prompt_req: 'enter prompt',
+        toast_egress_mode: 'egress: {mode}',
+        toast_egress_on: 'egress on',
+        toast_egress_off: 'egress off',
+        toast_proxies_cleared: 'removed {removed} proxies',
+        toast_perm_saved: 'Permission mode updated: {mode}',
+        failed: 'failed'
+      }
+    };
+
+    let currentLang = 'zh';
+    try {
+      const saved = localStorage.getItem('agy_lang');
+      if (saved && (saved === 'zh' || saved === 'en')) currentLang = saved;
+      else if (navigator.language && !navigator.language.toLowerCase().startsWith('zh')) currentLang = 'en';
+    } catch (e) {}
+
+    function t(key, params) {
+      let val = (I18N[currentLang] && I18N[currentLang][key]) || (I18N['zh'] && I18N['zh'][key]) || key;
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          val = val.replace(new RegExp('\\{' + k + '\\}', 'g'), v);
+        }
+      }
+      return val;
+    }
+
+    function applyStaticI18n() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        if (key) el.textContent = t(key);
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.dataset.i18nPlaceholder;
+        if (key) el.placeholder = t(key);
+      });
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.dataset.i18nTitle;
+        if (key) el.title = t(key);
+      });
+    }
+
+    function setLanguage(lang) {
+      currentLang = (lang === 'en' ? 'en' : 'zh');
+      try { localStorage.setItem('agy_lang', currentLang); } catch (e) {}
+      document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+      const sel = $('langSelect');
+      if (sel && sel.value !== currentLang) sel.value = currentLang;
+      applyStaticI18n();
+      if (lastState) renderState(lastState);
+      if (lastQuota) renderQuota(lastQuota);
+    }
+
     const BASE = location.origin;
     const API_KEY = new URLSearchParams(location.search).get('key') || '';
     let loginLabel = '';
     let loginUrl = '';
     let lastState = null;
+    let lastQuota = null;
     let modelsFilled = false;
 
     const $ = (id) => document.getElementById(id);
     function toast(m) {
-      const t = $('toast'); t.textContent = m; t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2800);
+      const el = $('toast'); el.textContent = m; el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2800);
     }
     function esc(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -349,15 +707,15 @@
         const headers = Object.assign({}, opts.headers || {});
         if (API_KEY) headers.Authorization = headers.Authorization || ('Bearer ' + API_KEY);
         const r = await fetch(BASE + p, Object.assign({}, opts, { headers }));
-        const j = await r.json().catch(() => ({ error: 'bukan JSON', status: r.status }));
+        const j = await r.json().catch(() => ({ error: 'non-JSON response', status: r.status }));
         if (!r.ok && !j.ok && !j.error) j.error = 'HTTP ' + r.status;
         return j;
-      } catch (e) { toast('gagal: ' + e.message); return null; }
+      } catch (e) { toast(t('failed') + ': ' + e.message); return null; }
     }
     async function act(p) {
-      toast('menjalankan ' + p + ' ...');
+      toast(t('toast_running', { p }));
       const r = await api(p, { method: 'POST' });
-      if (r) toast((r.ok !== false ? 'selesai' : 'gagal') + ': ' + (r.error || p));
+      if (r) toast(r.ok !== false ? t('toast_done', { info: r.error || p }) : t('toast_failed', { info: r.error || p }));
       refresh();
     }
 
@@ -381,17 +739,20 @@
       return el.querySelector('.body');
     }
 
-    async function refresh() {
-      const s = await api('/admin/state');
+    function renderState(s) {
       if (!s) return;
-      lastState = s;
       const A = s.accounts.summary, E = s.egress;
 
       $('hdrMeta').textContent = '127.0.0.1:' + s.port;
       $('verPill').textContent = 'v' + (s.version || '');
-      $('statusPill').textContent = A.usable + '/' + A.total + ' akun · busy ' + (s.accounts.busy || 0) + ' · ' + A.requests + ' req';
+      $('statusPill').textContent = t('status_summary', {
+        usable: A.usable,
+        total: A.total,
+        busy: s.accounts.busy || 0,
+        reqs: A.requests
+      });
       $('statusPill').className = 'pill' + (A.usable ? ' ok' : ' bad');
-      $('egPill').textContent = E.enabled ? ('egress on · ' + E.total) : 'egress off';
+      $('egPill').textContent = E.enabled ? (t('egress_on') + ' · ' + E.total) : t('egress_off');
       $('egPill').className = 'pill' + (E.enabled ? ' ok' : '');
       $('egSwitch').checked = !!E.enabled;
 
@@ -399,21 +760,23 @@
       $('egMeta').textContent = E.alive + '/' + E.total + ' · ' + (E.mode || 'rotate');
       const items = E.items || [];
       $('egEmpty').style.display = items.length ? 'none' : 'block';
+      $('egEmpty').textContent = t('proxies_empty');
       $('egRows').innerHTML = items.map(p =>
         '<tr><td class="muted">' + p.id + '</td><td class="mono">' + esc(p.host) + '</td>' +
-        '<td>' + (p.ok ? '<span class="pill ok">ok</span>' : '<span class="pill bad">mati</span>') + '</td>' +
+        '<td>' + (p.ok ? '<span class="pill ok">' + t('st_ok') + '</span>' : '<span class="pill bad">' + t('st_dead') + '</span>') + '</td>' +
         '<td class="num">' + p.fails + '</td><td class="num">' + (p.latencyMs != null ? p.latencyMs + 'ms' : '-') + '</td>' +
         '<td class="mono">' + esc(p.egressIp || '-') + '</td>' +
-        '<td><button class="icon-btn bad" onclick="delProxy(' + p.id + ')">hapus</button></td></tr>'
+        '<td><button class="icon-btn bad" onclick="delProxy(' + p.id + ')">' + t('btn_del') + '</button></td></tr>'
       ).join('');
 
-      $('acct-sub').textContent = A.total + ' akun';
+      $('acct-sub').textContent = t('accts_count', { n: A.total });
       const accts = s.accounts.items || [];
       $('acctEmpty').style.display = accts.length ? 'none' : 'block';
+      $('acctEmpty').textContent = t('acct_empty');
       $('acctRows').innerHTML = accts.map(a => {
-        const st = a.disabled ? '<span class="pill bad">disabled</span>'
-                 : a.cooling ? '<span class="pill warn">cooldown ' + a.cooldownSec + 's</span>'
-                 : '<span class="pill ok">siap</span>';
+        const st = a.disabled ? '<span class="pill bad">' + t('st_disabled') + '</span>'
+                 : a.cooling ? '<span class="pill warn">' + t('st_cooldown', { s: a.cooldownSec }) + '</span>'
+                 : '<span class="pill ok">' + t('st_ready') + '</span>';
         const err = a.last_error ? '<div class="err" style="font-size:11px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(a.last_error) + '">' + esc(a.last_error) + '</div>' : '';
         return '<tr><td class="mono">' + esc(a.label) + err + '</td>' +
           '<td class="muted">' + esc(a.email || '-') + '</td><td>' + st + '</td>' +
@@ -421,13 +784,13 @@
           '<td class="num mono">' + fmt(a.tokens_in) + '</td><td class="num mono">' + fmt(a.tokens_out) + '</td>' +
           '<td class="muted">' + (a.last_used ? a.last_used.slice(11, 19) : '-') + '</td>' +
           '<td style="white-space:nowrap">' +
-            '<button class="icon-btn" onclick="tog(\'' + esc(a.label) + '\',' + (a.disabled ? 'false' : 'true') + ')">' + (a.disabled ? 'enable' : 'disable') + '</button> ' +
-            '<button class="icon-btn bad" onclick="delAcct(\'' + esc(a.label) + '\')">hapus</button>' +
+            '<button class="icon-btn" onclick="tog(\'' + esc(a.label) + '\',' + (a.disabled ? 'false' : 'true') + ')">' + (a.disabled ? t('btn_enable') : t('btn_disable')) + '</button> ' +
+            '<button class="icon-btn bad" onclick="delAcct(\'' + esc(a.label) + '\')">' + t('btn_del') + '</button>' +
           '</td></tr>';
       }).join('');
 
       const models = s.models || [];
-      $('m-sub').textContent = models.length + ' model';
+      $('m-sub').textContent = t('models_count', { n: models.length });
       $('modelRows').innerHTML = models.map(m =>
         '<tr><td class="mono">' + esc(m.id) + '</td><td class="muted">' + esc(m.label || '') + '</td></tr>'
       ).join('');
@@ -452,10 +815,10 @@
           '<td class="num mono">' + fmt(b.tokens) + '</td></tr>';
       }
       $('usageWindows').innerHTML =
-        winRow('1 hari', W.d1) +
-        winRow('7 hari', W.d7) +
-        winRow('30 hari', W.d30) +
-        winRow('Semua', W.all);
+        winRow(t('period_1d'), W.d1) +
+        winRow(t('period_7d'), W.d7) +
+        winRow(t('period_30d'), W.d30) +
+        winRow(t('period_all'), W.all);
       const mods = U.models || [];
       $('usageModels').innerHTML = mods.length
         ? mods.map(m =>
@@ -467,12 +830,13 @@
             '<td class="num mono">' + fmt(m.tokens_out) + '</td>' +
             '<td class="num mono">' + fmt(m.tokens) + '</td></tr>'
           ).join('')
-        : '<tr><td colspan="7" class="muted">belum ada</td></tr>';
+        : '<tr><td colspan="7" class="muted">' + t('none_yet') + '</td></tr>';
       $('reqEmpty').style.display = rec.length ? 'none' : 'block';
+      $('reqEmpty').textContent = t('req_empty');
       $('reqRows').innerHTML = rec.map(r => {
-        const t = r.t ? new Date(r.t).toISOString().slice(11, 19) : '-';
+        const timeStr = r.t ? new Date(r.t).toISOString().slice(11, 19) : '-';
         const rin = r.tokens_in || 0, rout = r.tokens_out || 0;
-        return '<tr><td class="mono muted">' + t + '</td><td>' + (r.ok ? '<span class="pill ok">ok</span>' : '<span class="pill bad">err</span>') + '</td>' +
+        return '<tr><td class="mono muted">' + timeStr + '</td><td>' + (r.ok ? '<span class="pill ok">ok</span>' : '<span class="pill bad">err</span>') + '</td>' +
           '<td class="mono">' + esc(r.account || '') + '</td><td class="mono">' + esc(r.model || '') + '</td>' +
           '<td class="mono muted">' + esc(r.egress || '') + '</td>' +
           '<td class="num mono">' + fmt(rin) + '</td><td class="num mono">' + fmt(rout) + '</td>' +
@@ -484,8 +848,18 @@
       $('agyPath').textContent = s.agy || '—';
       $('rotText').textContent = (s.config && s.config.rotation) || 'lru';
       $('defModel').textContent = (s.config && s.config.defaultModel) || '—';
+      if (s.config && s.config.permissionMode && $('permModeSelect')) {
+        $('permModeSelect').value = s.config.permissionMode;
+      }
       $('inflightText').textContent = (s.inflight || 0) + '/' + (s.maxInflight || '?') + '  q ' + (s.queued || 0);
       $('uptimeText').textContent = Math.floor((s.uptimeSec || 0) / 60) + 'm';
+    }
+
+    async function refresh() {
+      const s = await api('/admin/state');
+      if (!s) return;
+      lastState = s;
+      renderState(s);
     }
 
     async function tog(label, dis) {
@@ -493,54 +867,54 @@
       refresh();
     }
     async function delAcct(label) {
-      if (!confirm('Hapus akun "' + label + '"?')) return;
+      if (!confirm(t('confirm_del_acct', { label }))) return;
       const r = await api('/admin/accounts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) });
-      toast(r && r.ok ? ('akun dihapus: ' + label) : ('gagal: ' + (r && r.error || 'unknown')));
+      toast(r && r.ok ? t('toast_acct_deleted', { label }) : (t('toast_failed', { info: (r && r.error || 'unknown') })));
       refresh();
     }
     async function delProxy(id) {
-      if (!confirm('Hapus proxy #' + id + '?')) return;
+      if (!confirm(t('confirm_del_proxy', { id }))) return;
       const r = await api('/admin/egress/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      toast(r && r.ok ? 'proxy dihapus' : ('gagal: ' + (r && r.error || 'unknown')));
+      toast(r && r.ok ? t('toast_proxy_deleted') : (t('toast_failed', { info: (r && r.error || 'unknown') })));
       refresh();
     }
     async function addBulk(andCheck) {
       const text = $('p-bulk').value;
-      if (!text.trim()) { toast('tempel baris proxy dulu'); return; }
+      if (!text.trim()) { toast(t('toast_paste_proxy')); return; }
       const r = await api('/admin/egress/add-bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       if (r && (r.ok || r.added > 0)) {
-        toast('ditambah ' + r.added + '  skip ' + r.skipped + '  err ' + ((r.errors && r.errors.length) || 0));
+        toast(t('toast_bulk_added', { added: r.added, skipped: r.skipped, errors: (r.errors && r.errors.length) || 0 }));
         $('p-bulk').value = '';
         if (andCheck) await act('/admin/egress/check');
-      } else toast('gagal: ' + (r && r.error || 'unknown'));
+      } else toast(t('toast_failed', { info: (r && r.error || 'unknown') }));
       refresh();
     }
     async function startLogin() {
       const label = $('a-label').value.trim();
-      if (!label) { toast('label wajib diisi'); return; }
+      if (!label) { toast(t('toast_label_req')); return; }
       const r = await api('/admin/accounts/login/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) });
-      if (!r || !r.ok) { toast('gagal: ' + (r && r.error || 'unknown')); return; }
+      if (!r || !r.ok) { toast(t('toast_failed', { info: (r && r.error || 'unknown') })); return; }
       loginLabel = label; loginUrl = r.url;
       $('login-box').style.display = 'block';
       $('login-url').textContent = r.url;
       $('login-open').href = r.url;
       $('a-code').value = '';
       $('a-code').focus();
-      toast('link siap — buka, login, tempel URL redirect');
+      toast(t('toast_link_ready'));
     }
     async function completeLogin() {
       const label = loginLabel || $('a-label').value.trim();
       const code = $('a-code').value.trim();
-      if (!label) { toast('label kosong'); return; }
-      if (!code) { toast('tempel URL redirect atau code'); return; }
-      toast('menukar code ...');
+      if (!label) { toast(t('toast_label_empty')); return; }
+      if (!code) { toast(t('toast_paste_code')); return; }
+      toast(t('toast_exchanging'));
       const r = await api('/admin/accounts/login/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, code }) });
       if (r && r.ok) {
-        toast('akun masuk: ' + (r.email || label) + (r.hasRefresh ? '' : ' (tanpa refresh_token)'));
+        toast(t('toast_acct_saved', { email: (r.email || label) }) + (r.hasRefresh ? '' : t('toast_no_refresh')));
         $('a-label').value = ''; $('a-code').value = '';
         $('login-box').style.display = 'none';
         $('loginPanel').style.display = 'none';
-      } else toast('gagal: ' + (r && r.error || 'unknown'));
+      } else toast(t('toast_failed', { info: (r && r.error || 'unknown') }));
       refresh();
     }
     function pctCell(v) {
@@ -549,20 +923,13 @@
       const cls = n >= 50 ? 'ok' : n >= 15 ? 'warn' : 'bad';
       return '<span class="pill ' + cls + '">' + n + '%</span>';
     }
-    let quotaLoading = false;
-    async function loadQuota(force) {
-      if (quotaLoading && !force) return;
-      quotaLoading = true;
-      $('quotaEmpty').style.display = 'block';
-      $('quotaEmpty').textContent = 'Mengambil quota semua akun…';
-      $('quotaMeta').textContent = 'loading';
-      const r = await api('/admin/quota' + (force ? '?force=1' : ''));
-      quotaLoading = false;
-      if (!r) { $('quotaEmpty').textContent = 'gagal jaringan'; return; }
+
+    function renderQuota(r) {
+      if (!r) return;
       const items = r.items || [];
-      $('quotaMeta').textContent = (r.cached ? 'cache ' + Math.round((r.ageMs || 0) / 1000) + 's' : 'fresh') + ' · ' + items.length + ' akun';
+      $('quotaMeta').textContent = (r.cached ? t('quota_cached', { s: Math.round((r.ageMs || 0) / 1000) }) : t('quota_fresh')) + ' · ' + t('accts_count', { n: items.length });
       $('quotaEmpty').style.display = items.length ? 'none' : 'block';
-      if (!items.length) $('quotaEmpty').textContent = 'Belum ada akun.';
+      if (!items.length) $('quotaEmpty').textContent = t('acct_empty');
       $('quotaRows').innerHTML = items.map(a =>
         '<tr><td class="mono">' + esc(a.label) + (a.ok ? '' : ' <span class="pill bad">err</span>') + '</td>' +
         '<td class="muted">' + esc(a.email || '-') + '</td>' +
@@ -572,10 +939,25 @@
         '<td class="num muted">' + (a.ms || 0) + (a.error ? '<div class="err" style="font-size:11px">' + esc(a.error) + '</div>' : '') + '</td></tr>'
       ).join('');
     }
+
+    let quotaLoading = false;
+    async function loadQuota(force) {
+      if (quotaLoading && !force) return;
+      quotaLoading = true;
+      $('quotaEmpty').style.display = 'block';
+      $('quotaEmpty').textContent = t('quota_fetching');
+      $('quotaMeta').textContent = t('loading');
+      const r = await api('/admin/quota' + (force ? '?force=1' : ''));
+      quotaLoading = false;
+      if (!r) { $('quotaEmpty').textContent = t('net_error'); return; }
+      lastQuota = r;
+      renderQuota(r);
+    }
+
     async function play() {
       const prompt = $('pg-prompt').value.trim();
       const model = $('pg-model').value;
-      if (!prompt) { toast('isi prompt'); return; }
+      if (!prompt) { toast(t('toast_prompt_req')); return; }
       addMsg('user', prompt);
       $('pg-prompt').value = '';
       const body = addMsg('assistant', '…');
@@ -591,9 +973,9 @@
     $('btnReqRefresh').onclick = refresh;
     $('btnEgCheck').onclick = () => act('/admin/egress/check');
     $('btnEgClear').onclick = async () => {
-      if (!confirm('Hapus SEMUA proxy?')) return;
+      if (!confirm(t('confirm_clear_proxies'))) return;
       const r = await api('/admin/egress/clear', { method: 'POST' });
-      toast(r && r.ok ? ('terhapus ' + r.removed) : ('gagal: ' + (r && r.error || 'unknown')));
+      toast(r && r.ok ? t('toast_proxies_cleared', { removed: r.removed }) : (t('toast_failed', { info: (r && r.error || 'unknown') })));
       refresh();
     };
     $('btnEgAdd').onclick = () => addBulk(false);
@@ -602,14 +984,14 @@
       const mode = $('eg-mode').value;
       const en = $('egSwitch').checked;
       await api('/admin/egress/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, enabled: en }) });
-      toast('egress: ' + mode);
+      toast(t('toast_egress_mode', { mode }));
       refresh();
     };
     $('egSwitch').onchange = async () => {
       const mode = $('eg-mode').value;
       const en = $('egSwitch').checked;
       await api('/admin/egress/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, enabled: en }) });
-      toast('egress ' + (en ? 'on' : 'off'));
+      toast(en ? t('toast_egress_on') : t('toast_egress_off'));
       refresh();
     };
     $('btnLogin').onclick = () => {
@@ -621,12 +1003,30 @@
     $('btnSaveAcct').onclick = completeLogin;
     $('btnCopyUrl').onclick = () => {
       if (!loginUrl) return;
-      navigator.clipboard.writeText(loginUrl).then(() => toast('link disalin')).catch(() => toast('gagal salin'));
+      navigator.clipboard.writeText(loginUrl).then(() => toast(t('toast_link_copied'))).catch(() => toast(t('toast_copy_failed')));
     };
     $('btnProbe').onclick = () => act('/admin/accounts/probe');
     $('btnCdReset').onclick = () => act('/admin/accounts/reset');
     $('btnQuotaForce').onclick = () => loadQuota(true);
 
+    $('langSelect').onchange = (e) => {
+      setLanguage(e.target.value);
+    };
+
+    if ($('permModeSelect')) {
+      $('permModeSelect').onchange = async () => {
+        const mode = $('permModeSelect').value;
+        const r = await api('/admin/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permissionMode: mode }) });
+        if (r && r.ok) {
+          toast(t('toast_perm_saved', { mode }));
+        } else {
+          toast(t('toast_failed', { info: (r && r.error || 'error') }));
+        }
+        refresh();
+      };
+    }
+
+    setLanguage(currentLang);
     refresh();
     loadQuota(false);
   </script>
