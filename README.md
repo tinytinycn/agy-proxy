@@ -1,67 +1,177 @@
-# Antigravity CLI → OpenAI proxy
+<div align="center">
 
-Local (or VPS) HTTP proxy that turns `agy` (Antigravity CLI) quota into OpenAI / Anthropic / Gemini endpoints. Multi-account round-robin + egress HTTP proxy pool.
+# Antigravity CLI → OpenAI / Claude / Gemini Proxy
 
-Requires **agy.exe** (or `agy` on Linux). Direct Cloud Code HTTP is 403 `SUBSCRIPTION_REQUIRED` — the backend is always a CLI subprocess.
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="README_zh.md"><img src="https://img.shields.io/badge/语言-简体中文-red?style=for-the-badge" alt="简体中文"></a>
+</p>
 
-## Endpoints
+<p align="center">
+  <b>English</b> | <a href="README_zh.md">简体中文</a>
+</p>
 
-| Path | Notes |
-|------|--------|
-| `POST /v1/chat/completions` | OpenAI, stream + non-stream |
-| `POST /v1/messages` | Anthropic |
-| `POST /v1beta/models/{m}:generateContent` | Gemini native |
-| `GET /v1/models` | model list |
-| `GET /healthz` | liveness |
-| `GET /admin/ui` | dashboard (loopback open; remote needs API key) |
+Local (or VPS) HTTP proxy that turns `agy` (Antigravity CLI) quota into standard **OpenAI**, **Anthropic (Claude)**, and **Gemini Native** API endpoints.<br/>
+Features **true streaming reasoning**, **tool call visualization**, **configurable permission modes**, **multi-account rotation**, and a **bilingual admin dashboard**.
 
-Default listen: `127.0.0.1:1413`. Client key: `sk-agy-local` (change in `config.json`).
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-green.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![i18n](https://img.shields.io/badge/Admin%20UI-English%20%7C%20中文-orange.svg)](#dashboard)
 
-## Setup
+</div>
 
+---
+
+## 🌟 Highlights
+
+- 🚀 **Full Protocol Compatibility**:
+  - **OpenAI**: `POST /v1/chat/completions` (stream & non-stream) + `GET /v1/models`
+  - **Anthropic**: `POST /v1/messages` (Claude thinking compatible)
+  - **Gemini Native**: `POST /v1beta/models/{model}:generateContent`
+- 🧠 **True Streaming Reasoning**:
+  - Emits real-time reasoning content into `delta.reasoning_content` and `delta.reasoning` (OpenAI), `thinking_delta` (Anthropic), and native thought parts (Gemini);
+  - Native support for Gemini 3.8 Flash / Pro with auto-configured `--effort` (low/medium/high) to prevent 502 errors.
+- ⚙️ **Real-time Tool Call Visualization**:
+  - Intercepts CLI tool execution events (running commands, file operations, web searches) and injects them live into the thought stream (e.g. `⚙️ [调用工具] ...` and `↳ 完成`);
+  - Prevents timeouts and perceived freezes in long-running coding agents like Trae, Cursor, and Cline.
+- 🛡️ **Configurable Permission Modes**:
+  - `skip` (default): fully automated headless execution (`--dangerously-skip-permissions`);
+  - `accept-edits`: auto-approves workspace edits;
+  - `plan`: read-only planning mode.
+- 🌐 **Modern Bilingual Dashboard (i18n)**:
+  - Built-in web dashboard with seamless **English / 中文** switching;
+  - Account health status, 1d/7d/30d token and request usage statistics, quota viewer, and egress proxy checker.
+- 🔄 **Smart Account Rotation**:
+  - Isolated home directories for independent multi-account concurrency;
+  - Automatic cooldown and failover on rate limits.
+- 🌐 **Egress Proxy Pool**:
+  - Route through HTTP / Socks5 proxy pool to avoid IP restrictions.
+
+---
+
+## 📋 Endpoints
+
+| Path | Protocol | Notes |
+|------|----------|--------|
+| `POST /v1/chat/completions` | OpenAI | Chat completions, stream + non-stream, thinking delta |
+| `POST /v1/messages` | Anthropic | Claude messages API with thinking blocks |
+| `POST /v1beta/models/{m}:generateContent` | Gemini | Google Gemini native endpoint |
+| `GET /v1/models` | OpenAI | Available model list |
+| `GET /healthz` | General | Liveness probe |
+| `GET /admin/ui` | Dashboard | Web admin console (loopback open; remote needs API key) |
+
+Default listen: `127.0.0.1:1413`. Client key: `sk-agy-local` (configurable in `config.json`).
+
+---
+
+## 🚀 Setup & Quickstart
+
+### 1. Prerequisites
+- [Node.js](https://nodejs.org/) (>= 18)
+- Official `agy` CLI installed and logged in at least once.
+
+### 2. Install & Configure
 ```bash
+git clone https://github.com/tinytinycn/agy-proxy.git
+cd agy-proxy
+npm install
+
 cp config.json.example config.json
 cp accounts.json.example accounts.json
 cp proxies.txt.example proxies.txt
-# install agy CLI, log in once
-npm install
+```
+
+### 3. Run
+```bash
 node server.js
 ```
 
-Dashboard: http://127.0.0.1:1413/admin/ui
+Open Dashboard: [http://127.0.0.1:1413/admin/ui](http://127.0.0.1:1413/admin/ui)
 
-Add accounts in **Accounts**: Login (link + code) — open the Google URL, paste the `oauth-callback?code=...` redirect.
+---
 
-Linux login uses the official `agy` CLI (PTY via `script`). After **Buat link**, finish Google login and **Simpan** within ~50s (CLI timeout). Do not exchange the code yourself; `oauth-clients.json` secrets are not paired with the CLI client.
+## 🛠️ Client Integration
 
-Linux token file: `~/.gemini/antigravity-cli/antigravity-oauth-token` (per-account `HOME` / `geminiDir`).
+### Trae IDE / Cursor
+1. Go to settings and add a custom OpenAI API provider.
+2. Settings:
+   - **API Base URL**: `http://127.0.0.1:1413/v1`
+   - **API Key**: `sk-agy-local`
+   - **Model**: `gemini-3.8-flash` or `gemini-3.8-pro`
+3. Enjoy live thinking collapsible blocks and tool execution steps directly in the chat!
 
-## VPS
+### cURL Examples
+
+#### Streaming (with reasoning)
+```bash
+curl http://127.0.0.1:1413/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-agy-local" \
+  -d '{
+    "model": "gemini-3.8-flash",
+    "stream": true,
+    "messages": [{"role": "user", "content": "Explain quicksort with examples"}]
+  }'
+```
+
+---
+
+## ⚙️ Configuration (`config.json`)
+
+```json
+{
+  "apiKey": "sk-agy-local",
+  "rotation": "rotate",
+  "maxAccountRetries": 4,
+  "cooldownMs": 60000,
+  "defaultModel": "gemini-3.8-flash",
+  "permissionMode": "skip",
+  "adminAuth": false,
+  "listenHost": "127.0.0.1",
+  "listenPort": 1413,
+  "maxInflight": 8,
+  "egress": {
+    "mode": "rotate",
+    "enabled": false,
+    "failThreshold": 3
+  }
+}
+```
+
+---
+
+## 🖥️ VPS Deployment (Linux)
 
 ```bash
 export AGY_PROXY_HOST=0.0.0.0
 export AGY_PROXY_PORT=1413
-export AGY_BIN=/home/ubuntu/.local/bin/agy   # or wherever `agy` is
-node server.js
+export AGY_BIN=/home/ubuntu/.local/bin/agy
+
+npm install -g pm2
+pm2 start server.js --name "agy-proxy"
 ```
 
-- `/v1/*` always needs `Authorization: Bearer …`
-- Remote `/admin/*` needs the same key. Dashboard: `http://<ip>:1413/admin/ui?key=sk-agy-local`
-- Windows: agy spawn is **serialized** (one Credential Manager target). Linux: isolated `HOME` per account → parallel.
-- Egress check (`POST /admin/egress/check`) needs `undici` (`npm install`).
+- Remote dashboard: `http://<VPS_IP>:1413/admin/ui?key=sk-agy-local`
+- Linux accounts run under isolated `homes/` for parallel execution.
 
-## Layout
+---
+
+## 📂 Layout
 
 | File | Role |
 |------|------|
-| `server.js` | HTTP server |
-| `agy_cli.js` | spawn agy stream-json |
-| `accounts.js` | rotation, busy lock |
-| `proxies.js` | egress pool |
-| `auth.js` | OAuth link+code via CLI |
-| `quota.js` | `/quota` `/credits` per account |
-| `usage.js` | 1d / 7d / 30d request+token stats |
-| `dashboard.html` | admin UI |
+| `server.js` | HTTP gateway (OpenAI / Anthropic / Gemini routing & streaming) |
+| `agy_cli.js` | CLI subprocess execution, stream tag parsing & tool interception |
+| `accounts.js` | Account pool, concurrency lock, and rotation |
+| `proxies.js` | Egress HTTP/Socks5 pool |
+| `auth.js` | OAuth login flow via CLI |
+| `quota.js` | `/quota` balance checking per account |
+| `usage.js` | 1d / 7d / 30d request and token statistics |
+| `dashboard.html` | Admin UI with English / Chinese i18n support |
+| `config.json` | Server and proxy configuration |
 
-Do not commit `homes/`, `.gemini/`, `accounts.json`, `proxies.txt`, `usage.jsonl`,
-`oauth-clients.json`, or credential dumps.
+---
+
+## 📄 License
+
+Distributed under the [MIT License](LICENSE).
